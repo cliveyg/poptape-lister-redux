@@ -71,14 +71,14 @@ func PadString(s string, minLength int) string {
 func UniqueStrings(slice []string) []string {
 	keys := make(map[string]bool)
 	result := make([]string, 0, len(slice))
-	
+
 	for _, str := range slice {
 		if !keys[str] {
 			keys[str] = true
 			result = append(result, str)
 		}
 	}
-	
+
 	return result
 }
 
@@ -98,7 +98,7 @@ func ChunkStrings(slice []string, chunkSize int) [][]string {
 	if chunkSize <= 0 {
 		return nil
 	}
-	
+
 	var chunks [][]string
 	for i := 0; i < len(slice); i += chunkSize {
 		end := i + chunkSize
@@ -107,7 +107,7 @@ func ChunkStrings(slice []string, chunkSize int) [][]string {
 		}
 		chunks = append(chunks, slice[i:end])
 	}
-	
+
 	return chunks
 }
 
@@ -154,7 +154,7 @@ func ParseRFC3339(s string) (time.Time, error) {
 // TimeAgo returns a human-readable time difference
 func TimeAgo(t time.Time) string {
 	duration := time.Since(t)
-	
+
 	switch {
 	case duration < time.Minute:
 		return "just now"

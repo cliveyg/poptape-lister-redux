@@ -19,7 +19,7 @@ func (a *App) GetWatchlist(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"message": "Could not find any watchlist items"})
 		return
 	}
-	
+
 	response := WatchlistResponse{Watchlist: document.Items}
 	c.JSON(http.StatusOK, response)
 }
@@ -74,7 +74,7 @@ func (a *App) GetFavourites(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"message": "Could not find any favourites"})
 		return
 	}
-	
+
 	// Convert UUIDs to favourite items (in production, you'd fetch usernames from another service)
 	favourites := make([]FavouriteItem, len(document.Items))
 	for i, uuid := range document.Items {
@@ -83,7 +83,7 @@ func (a *App) GetFavourites(c *gin.Context) {
 			PublicID: uuid,
 		}
 	}
-	
+
 	response := FavouritesResponse{Favourites: favourites}
 	c.JSON(http.StatusOK, response)
 }
@@ -138,7 +138,7 @@ func (a *App) GetRecentlyViewed(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"message": "Could not find any recently viewed items"})
 		return
 	}
-	
+
 	response := ViewedResponse{RecentlyViewed: document.Items}
 	c.JSON(http.StatusOK, response)
 }
@@ -176,7 +176,7 @@ func (a *App) GetRecentBids(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"message": "Could not find any recent bids"})
 		return
 	}
-	
+
 	// In a real implementation, these would be actual bid records with auction_id, lot_id, amount
 	bids := make([]BidItem, len(document.Items))
 	for i, uuid := range document.Items {
@@ -186,7 +186,7 @@ func (a *App) GetRecentBids(c *gin.Context) {
 			Amount:    100.00, // Placeholder
 		}
 	}
-	
+
 	response := RecentBidsResponse{RecentBids: bids}
 	c.JSON(http.StatusOK, response)
 }
@@ -224,7 +224,7 @@ func (a *App) GetPurchased(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"message": "Could not find any purchased items"})
 		return
 	}
-	
+
 	// In a real implementation, these would be actual purchase records
 	purchases := make([]PurchaseItem, len(document.Items))
 	for i, uuid := range document.Items {
@@ -235,7 +235,7 @@ func (a *App) GetPurchased(c *gin.Context) {
 			Amount:     150.00, // Placeholder
 		}
 	}
-	
+
 	response := PurchasedResponse{Purchased: purchases}
 	c.JSON(http.StatusOK, response)
 }
@@ -268,7 +268,7 @@ func (a *App) AddToPurchased(c *gin.Context) {
 
 func (a *App) GetWatchingCount(c *gin.Context) {
 	itemID := c.Param("item_id")
-	
+
 	if !IsValidUUID(itemID) {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid item ID format"})
 		return
@@ -280,7 +280,7 @@ func (a *App) GetWatchingCount(c *gin.Context) {
 
 	collection := a.GetCollection("watchlist")
 	filter := bson.M{"items": itemID}
-	
+
 	count, err := collection.CountDocuments(ctx, filter)
 	if err != nil {
 		a.Log.Error().Err(err).Msg("Error counting watching users")
@@ -316,12 +316,12 @@ func (a *App) addToList(publicID, listType, uuid string) error {
 	defer cancel()
 
 	collection := a.GetCollection(listType)
-	
+
 	// Try to get existing document
 	document, err := a.getListDocument(publicID, listType)
-	
+
 	now := time.Now()
-	
+
 	if err == mongo.ErrNoDocuments {
 		// Create new document
 		newDocument := UserList{
@@ -331,7 +331,7 @@ func (a *App) addToList(publicID, listType, uuid string) error {
 			CreatedAt: now,
 			UpdatedAt: now,
 		}
-		
+
 		_, err = collection.InsertOne(ctx, newDocument)
 		return err
 	} else if err != nil {
@@ -347,12 +347,12 @@ func (a *App) addToList(publicID, listType, uuid string) error {
 
 	// Add to beginning of list (most recent first)
 	document.Items = append([]string{uuid}, document.Items...)
-	
+
 	// Limit to 50 items (as per original Python implementation)
 	if len(document.Items) > 50 {
 		document.Items = document.Items[:50]
 	}
-	
+
 	document.UpdatedAt = now
 
 	filter := bson.M{"_id": publicID}
@@ -372,7 +372,7 @@ func (a *App) removeFromList(publicID, listType, uuid string) error {
 	defer cancel()
 
 	collection := a.GetCollection(listType)
-	
+
 	document, err := a.getListDocument(publicID, listType)
 	if err != nil {
 		return err

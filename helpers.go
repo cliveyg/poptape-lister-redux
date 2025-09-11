@@ -54,7 +54,7 @@ func Contains(slice []string, item string) bool {
 func RemoveFromSlice(slice []string, item string) []string {
 	result := make([]string, 0, len(slice))
 	removed := false
-	
+
 	for _, s := range slice {
 		if s == item && !removed {
 			removed = true
@@ -62,7 +62,7 @@ func RemoveFromSlice(slice []string, item string) []string {
 		}
 		result = append(result, s)
 	}
-	
+
 	return result
 }
 
@@ -106,20 +106,20 @@ func ValidateLimit(limitStr string, defaultLimit, maxLimit int) (int, error) {
 	if limitStr == "" {
 		return defaultLimit, nil
 	}
-	
+
 	limit, err := strconv.Atoi(limitStr)
 	if err != nil {
 		return 0, fmt.Errorf("invalid limit parameter: %s", limitStr)
 	}
-	
+
 	if limit < 1 {
 		return 0, fmt.Errorf("limit must be positive: %d", limit)
 	}
-	
+
 	if limit > maxLimit {
 		return maxLimit, nil
 	}
-	
+
 	return limit, nil
 }
 
@@ -128,16 +128,16 @@ func ValidateOffset(offsetStr string) (int, error) {
 	if offsetStr == "" {
 		return 0, nil
 	}
-	
+
 	offset, err := strconv.Atoi(offsetStr)
 	if err != nil {
 		return 0, fmt.Errorf("invalid offset parameter: %s", offsetStr)
 	}
-	
+
 	if offset < 0 {
 		return 0, fmt.Errorf("offset must be non-negative: %d", offset)
 	}
-	
+
 	return offset, nil
 }
 
@@ -166,7 +166,7 @@ func NewInternalError() map[string]interface{} {
 func GetValidListTypes() []string {
 	return []string{
 		"watchlist",
-		"favourites", 
+		"favourites",
 		"viewed",
 		"recentbids",
 		"purchased",
@@ -177,12 +177,12 @@ func GetValidListTypes() []string {
 func IsValidListType(listType string) bool {
 	validTypes := GetValidListTypes()
 	normalizedType := TrimAndLower(listType)
-	
+
 	for _, validType := range validTypes {
 		if validType == normalizedType {
 			return true
 		}
 	}
-	
+
 	return false
 }

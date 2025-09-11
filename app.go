@@ -8,10 +8,10 @@ import (
 )
 
 type App struct {
-	Router   *gin.Engine
-	DB       *mongo.Database
-	Client   *mongo.Client
-	Log      *zerolog.Logger
+	Router *gin.Engine
+	DB     *mongo.Database
+	Client *mongo.Client
+	Log    *zerolog.Logger
 }
 
 func (a *App) InitialiseApp() {

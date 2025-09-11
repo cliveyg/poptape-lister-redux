@@ -1,9 +1,6 @@
 # Build stage
 FROM golang:1.21-alpine AS builder
 
-# Add bash etc as alpine version doesn't have these
-RUN apk add --no-cache bash git
-
 # Set working directory
 WORKDIR /app
 
@@ -19,11 +16,8 @@ COPY . .
 # Build the application
 RUN CGO_ENABLED=0 GOOS=linux go build -o lister .
 
-# Final stage
-FROM alpine:latest
-
-# Add bash and other utilities
-RUN apk --no-cache add bash ca-certificates tzdata
+# Final stage - use busybox for smaller image and better compatibility
+FROM busybox:latest
 
 # Set working directory
 WORKDIR /root/

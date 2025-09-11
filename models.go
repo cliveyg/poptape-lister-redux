@@ -9,11 +9,11 @@ import (
 // Main data structure for all list types (watchlist, favourites, etc.)
 
 type UserList struct {
-	ID        string                 `json:"_id" bson:"_id"`
-	ListType  string                 `json:"list_type" bson:"list_type"`
-	Items     []string               `json:"items" bson:"items"`
-	CreatedAt time.Time              `json:"created_at" bson:"created_at"`
-	UpdatedAt time.Time              `json:"updated_at" bson:"updated_at"`
+	ID        string    `json:"_id" bson:"_id"`
+	ListType  string    `json:"list_type" bson:"list_type"`
+	Items     []string  `json:"items" bson:"items"`
+	CreatedAt time.Time `json:"created_at" bson:"created_at"`
+	UpdatedAt time.Time `json:"updated_at" bson:"updated_at"`
 }
 
 //-----------------------------------------------------------------------------
