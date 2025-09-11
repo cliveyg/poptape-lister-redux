@@ -1,0 +1,85 @@
+package main
+
+import (
+	"github.com/gin-gonic/gin"
+	"net/http"
+	"os"
+)
+
+func (a *App) initialiseRoutes() {
+
+	a.Log.Info().Msg("Initialising routes")
+
+	// Add middleware
+	a.Router.Use(a.CORSMiddleware())
+	a.Router.Use(a.JSONOnlyMiddleware())
+	a.Router.Use(a.LoggingMiddleware())
+	a.Router.Use(a.RateLimitMiddleware())
+
+	// Public routes (no authentication required)
+	a.Router.GET("/list/status", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "System running...", "version": os.Getenv("VERSION")})
+	})
+
+	// Route to get count of people watching an item (unauthenticated)
+	a.Router.GET("/list/watching/:item_id", func(c *gin.Context) {
+		a.GetWatchingCount(c)
+	})
+
+	// Authenticated routes
+	authenticated := a.Router.Group("/list")
+	authenticated.Use(a.AuthMiddleware())
+	{
+		// Watchlist routes
+		authenticated.GET("/watchlist", func(c *gin.Context) {
+			a.GetWatchlist(c)
+		})
+		authenticated.POST("/watchlist", func(c *gin.Context) {
+			a.AddToWatchlist(c)
+		})
+		authenticated.DELETE("/watchlist", func(c *gin.Context) {
+			a.RemoveFromWatchlist(c)
+		})
+
+		// Favourites routes
+		authenticated.GET("/favourites", func(c *gin.Context) {
+			a.GetFavourites(c)
+		})
+		authenticated.POST("/favourites", func(c *gin.Context) {
+			a.AddToFavourites(c)
+		})
+		authenticated.DELETE("/favourites", func(c *gin.Context) {
+			a.RemoveFromFavourites(c)
+		})
+
+		// Recently viewed routes
+		authenticated.GET("/viewed", func(c *gin.Context) {
+			a.GetRecentlyViewed(c)
+		})
+		authenticated.POST("/viewed", func(c *gin.Context) {
+			a.AddToRecentlyViewed(c)
+		})
+
+		// Recent bids routes
+		authenticated.GET("/recentbids", func(c *gin.Context) {
+			a.GetRecentBids(c)
+		})
+		authenticated.POST("/recentbids", func(c *gin.Context) {
+			a.AddToRecentBids(c)
+		})
+
+		// Purchase history routes
+		authenticated.GET("/purchased", func(c *gin.Context) {
+			a.GetPurchased(c)
+		})
+		authenticated.POST("/purchased", func(c *gin.Context) {
+			a.AddToPurchased(c)
+		})
+	}
+
+	// Handle 404s
+	a.Router.NoRoute(func(c *gin.Context) {
+		c.JSON(http.StatusNotFound, gin.H{"message": "Resource not found"})
+	})
+
+}
