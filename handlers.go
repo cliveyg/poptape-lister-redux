@@ -75,7 +75,6 @@ func (a *App) GetFavourites(c *gin.Context) {
 		return
 	}
 
-	// Convert UUIDs to favourite items (in production, you'd fetch usernames from another service)
 	favourites := make([]FavouriteItem, len(document.Items))
 	for i, uuid := range document.Items {
 		favourites[i] = FavouriteItem{
@@ -177,13 +176,12 @@ func (a *App) GetRecentBids(c *gin.Context) {
 		return
 	}
 
-	// In a real implementation, these would be actual bid records with auction_id, lot_id, amount
 	bids := make([]BidItem, len(document.Items))
 	for i, uuid := range document.Items {
 		bids[i] = BidItem{
 			AuctionID: uuid,
 			LotID:     uuid,
-			Amount:    100.00, // Placeholder
+			ItemID:    uuid,
 		}
 	}
 
@@ -221,18 +219,17 @@ func (a *App) GetPurchased(c *gin.Context) {
 	publicID, _ := c.Get("public_id")
 	document, err := a.getListDocument(publicID.(string), "purchased")
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"message": "Could not find any purchased items"})
+		c.JSON(http.StatusNotFound, gin.H{"message": "Could not find any list of purchases"})
 		return
 	}
 
-	// In a real implementation, these would be actual purchase records
-	purchases := make([]PurchaseItem, len(document.Items))
+	purchases := make([]PurchasedItem, len(document.Items))
 	for i, uuid := range document.Items {
-		purchases[i] = PurchaseItem{
+		purchases[i] = PurchasedItem{
 			PurchaseID: uuid,
 			AuctionID:  uuid,
 			LotID:      uuid,
-			Amount:     150.00, // Placeholder
+			ItemID:     uuid,
 		}
 	}
 
@@ -316,14 +313,11 @@ func (a *App) addToList(publicID, listType, uuid string) error {
 	defer cancel()
 
 	collection := a.GetCollection(listType)
-
-	// Try to get existing document
 	document, err := a.getListDocument(publicID, listType)
 
 	now := time.Now()
 
 	if err == mongo.ErrNoDocuments {
-		// Create new document
 		newDocument := UserList{
 			ID:        publicID,
 			ListType:  listType,
@@ -338,17 +332,14 @@ func (a *App) addToList(publicID, listType, uuid string) error {
 		return err
 	}
 
-	// Check if uuid already exists in the list
 	for _, existingUUID := range document.Items {
 		if existingUUID == uuid {
 			return nil // Already exists, no need to add
 		}
 	}
 
-	// Add to beginning of list (most recent first)
 	document.Items = append([]string{uuid}, document.Items...)
 
-	// Limit to 50 items (as per original Python implementation)
 	if len(document.Items) > 50 {
 		document.Items = document.Items[:50]
 	}
@@ -378,7 +369,6 @@ func (a *App) removeFromList(publicID, listType, uuid string) error {
 		return err
 	}
 
-	// Find and remove the UUID
 	newItems := make([]string, 0, len(document.Items))
 	for _, existingUUID := range document.Items {
 		if existingUUID != uuid {

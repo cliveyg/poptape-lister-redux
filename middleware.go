@@ -5,7 +5,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"net/http"
 	"os"
-	"strings"
 )
 
 // JSONOnlyMiddleware ensures only JSON requests are processed
@@ -36,16 +35,14 @@ func (a *App) AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// Get AUTHYURL from environment
 		authyURL := os.Getenv("AUTHYURL")
 		if authyURL == "" {
 			a.Log.Error().Msg("AUTHYURL environment variable not set")
-			c.JSON(http.StatusInternalServerError, gin.H{"message": "Authentication service configuration error"})
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Authentication service env error"})
 			c.Abort()
 			return
 		}
 
-		// Create HTTP client and request to poptape-authy service
 		client := &http.Client{}
 		req, err := http.NewRequest("GET", authyURL, nil)
 		if err != nil {
@@ -55,10 +52,8 @@ func (a *App) AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// Set the X-Access-Token header for the authy service
 		req.Header.Set("X-Access-Token", accessToken)
 
-		// Make the request to authy service
 		resp, err := client.Do(req)
 		if err != nil {
 			a.Log.Error().Err(err).Msg("Failed to call authentication service")
@@ -68,7 +63,6 @@ func (a *App) AuthMiddleware() gin.HandlerFunc {
 		}
 		defer resp.Body.Close()
 
-		// Check if authentication was successful
 		if resp.StatusCode != http.StatusOK {
 			a.Log.Warn().Int("status", resp.StatusCode).Msg("Authentication failed")
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid or expired token"})
@@ -76,7 +70,6 @@ func (a *App) AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// Parse the JSON response to extract public_id
 		var authResponse struct {
 			PublicID string `json:"public_id"`
 		}
@@ -88,7 +81,6 @@ func (a *App) AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// Validate that public_id was returned
 		if authResponse.PublicID == "" {
 			a.Log.Error().Msg("Authentication service returned empty public_id")
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Authentication service response error"})
@@ -96,7 +88,6 @@ func (a *App) AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// Validate UUID format of public_id
 		if !IsValidUUID(authResponse.PublicID) {
 			a.Log.Error().Str("public_id", authResponse.PublicID).Msg("Authentication service returned invalid public_id format")
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Authentication service response error"})
@@ -104,14 +95,12 @@ func (a *App) AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// Store public_id in context for handlers
 		c.Set("public_id", authResponse.PublicID)
 		a.Log.Info().Str("public_id", authResponse.PublicID).Msg("Authentication successful")
 		c.Next()
 	}
 }
 
-// CORSMiddleware handles CORS headers
 func (a *App) CORSMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Header("Access-Control-Allow-Origin", "*")
@@ -127,13 +116,11 @@ func (a *App) CORSMiddleware() gin.HandlerFunc {
 	}
 }
 
-// LoggingMiddleware logs requests
 func (a *App) LoggingMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := gin.Logger()
 		start(c)
 
-		// Log the request
 		a.Log.Info().
 			Str("method", c.Request.Method).
 			Str("path", c.Request.URL.Path).
@@ -144,16 +131,9 @@ func (a *App) LoggingMiddleware() gin.HandlerFunc {
 	}
 }
 
-// RateLimitMiddleware simulates the rate limiting from the Python version
 func (a *App) RateLimitMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// This is a simple placeholder - in production you'd want proper rate limiting
-		// The Python version uses Flask-Limiter
+		//TODO: Rate a rate limiter!
 		c.Next()
 	}
-}
-
-// Helper function to normalize list type names
-func normalizeListType(listType string) string {
-	return strings.ToLower(strings.TrimSpace(listType))
 }
