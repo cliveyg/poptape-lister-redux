@@ -49,20 +49,20 @@ type RecentBidsResponse struct {
 }
 
 type BidItem struct {
-	AuctionID string  `json:"auction_id"`
-	LotID     string  `json:"lot_id"`
-	Amount    float64 `json:"amount"`
+	AuctionID string `json:"auction_id"`
+	LotID     string `json:"lot_id"`
+	ItemID    string `json:"item_id"`
 }
 
 type PurchasedResponse struct {
-	Purchased []PurchaseItem `json:"purchased"`
+	Purchased []PurchasedItem `json:"purchased"`
 }
 
-type PurchaseItem struct {
-	PurchaseID string  `json:"purchase_id,omitempty"`
-	AuctionID  string  `json:"auction_id"`
-	LotID      string  `json:"lot_id"`
-	Amount     float64 `json:"amount"`
+type PurchasedItem struct {
+	PurchaseID string `json:"purchase_id,omitempty"`
+	AuctionID  string `json:"auction_id"`
+	LotID      string `json:"lot_id"`
+	ItemID     string `json:"item_id"`
 }
 
 type StatusResponse struct {

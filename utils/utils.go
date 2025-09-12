@@ -35,6 +35,10 @@ func IsValidUUID(u string) bool {
 	return err == nil
 }
 
+func NormalizeListType(listType string) string {
+	return strings.ToLower(strings.TrimSpace(listType))
+}
+
 //-----------------------------------------------------------------------------
 // String manipulation utilities
 
