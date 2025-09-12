@@ -8,9 +8,9 @@ import (
 // Collection interface for mockable database operations
 type Collection interface {
 	FindOne(ctx context.Context, filter interface{}) SingleResult
-	InsertOne(ctx context.Context, document interface{}) (*mongo.InsertOneResult, error)
-	UpdateOne(ctx context.Context, filter interface{}, update interface{}) (*mongo.UpdateOneResult, error)
-	DeleteOne(ctx context.Context, filter interface{}) (*mongo.DeleteResult, error)
+	InsertOne(ctx context.Context, document interface{}) (interface{}, error)
+	UpdateOne(ctx context.Context, filter interface{}, update interface{}) (interface{}, error)
+	DeleteOne(ctx context.Context, filter interface{}) (interface{}, error)
 	CountDocuments(ctx context.Context, filter interface{}) (int64, error)
 }
 
@@ -33,15 +33,15 @@ func (mc *MongoCollection) FindOne(ctx context.Context, filter interface{}) Sing
 	return &MongoSingleResult{mc.Collection.FindOne(ctx, filter)}
 }
 
-func (mc *MongoCollection) InsertOne(ctx context.Context, document interface{}) (*mongo.InsertOneResult, error) {
+func (mc *MongoCollection) InsertOne(ctx context.Context, document interface{}) (interface{}, error) {
 	return mc.Collection.InsertOne(ctx, document)
 }
 
-func (mc *MongoCollection) UpdateOne(ctx context.Context, filter interface{}, update interface{}) (*mongo.UpdateOneResult, error) {
+func (mc *MongoCollection) UpdateOne(ctx context.Context, filter interface{}, update interface{}) (interface{}, error) {
 	return mc.Collection.UpdateOne(ctx, filter, update)
 }
 
-func (mc *MongoCollection) DeleteOne(ctx context.Context, filter interface{}) (*mongo.DeleteResult, error) {
+func (mc *MongoCollection) DeleteOne(ctx context.Context, filter interface{}) (interface{}, error) {
 	return mc.Collection.DeleteOne(ctx, filter)
 }
 
