@@ -7,11 +7,11 @@ import (
 
 //-----------------------------------------------------------------------------
 // Main data structure for all list types (watchlist, favourites, etc.)
+// the ID field is the publicId of the current user
 
 type UserList struct {
 	ID        string    `json:"_id" bson:"_id"`
-	ListType  string    `json:"list_type" bson:"list_type"`
-	Items     []string  `json:"items" bson:"items"`
+	ItemIds   []string  `json:"item_ids" bson:"item_ids"`
 	CreatedAt time.Time `json:"created_at" bson:"created_at"`
 	UpdatedAt time.Time `json:"updated_at" bson:"updated_at"`
 }
@@ -28,7 +28,7 @@ type WatchlistResponse struct {
 }
 
 type FavouritesResponse struct {
-	Favourites []FavouriteItem `json:"favourites"`
+	Favourites []string `json:"favourites"`
 }
 
 type FavouriteItem struct {

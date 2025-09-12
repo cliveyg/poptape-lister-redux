@@ -32,48 +32,72 @@ func (a *App) initialiseRoutes() {
 	{
 		// Watchlist routes
 		authenticated.GET("/watchlist", func(c *gin.Context) {
-			a.GetWatchlist(c)
+			a.GetAllFromList(c, "watchlist")
 		})
 		authenticated.POST("/watchlist", func(c *gin.Context) {
-			a.AddToWatchlist(c)
+			a.AddToList(c, "watchlist")
+		})
+		authenticated.DELETE("/watchlist/:itemId", func(c *gin.Context) {
+			a.RemoveItemFromList(c, "watchlist")
 		})
 		authenticated.DELETE("/watchlist", func(c *gin.Context) {
-			a.RemoveFromWatchlist(c)
+			a.RemoveAllFromList(c, "watchlist")
 		})
 
 		// Favourites routes
 		authenticated.GET("/favourites", func(c *gin.Context) {
-			a.GetFavourites(c)
+			a.GetAllFromList(c, "favourites")
 		})
 		authenticated.POST("/favourites", func(c *gin.Context) {
-			a.AddToFavourites(c)
+			a.AddToList(c, "favourites")
+		})
+		authenticated.DELETE("/favourites/:itemId", func(c *gin.Context) {
+			a.RemoveItemFromList(c, "favourites")
 		})
 		authenticated.DELETE("/favourites", func(c *gin.Context) {
-			a.RemoveFromFavourites(c)
+			a.RemoveAllFromList(c, "favourites")
 		})
 
 		// Recently viewed routes
 		authenticated.GET("/viewed", func(c *gin.Context) {
-			a.GetRecentlyViewed(c)
+			a.GetAllFromList(c, "viewed")
 		})
 		authenticated.POST("/viewed", func(c *gin.Context) {
-			a.AddToRecentlyViewed(c)
+			a.AddToList(c, "viewed")
+		})
+		authenticated.DELETE("/viewed/:itemId", func(c *gin.Context) {
+			a.RemoveItemFromList(c, "viewed")
+		})
+		authenticated.DELETE("/viewed", func(c *gin.Context) {
+			a.RemoveAllFromList(c, "viewed")
 		})
 
 		// Recent bids routes
 		authenticated.GET("/bids", func(c *gin.Context) {
-			a.GetRecentBids(c)
+			a.GetAllFromList(c, "bids")
 		})
 		authenticated.POST("/bids", func(c *gin.Context) {
-			a.AddToRecentBids(c)
+			a.AddToList(c, "bids")
+		})
+		authenticated.DELETE("/bids/:itemId", func(c *gin.Context) {
+			a.RemoveItemFromList(c, "bids")
+		})
+		authenticated.DELETE("/bids", func(c *gin.Context) {
+			a.RemoveAllFromList(c, "bids")
 		})
 
 		// Purchase history routes
 		authenticated.GET("/purchased", func(c *gin.Context) {
-			a.GetPurchased(c)
+			a.GetAllFromList(c, "purchased")
 		})
 		authenticated.POST("/purchased", func(c *gin.Context) {
-			a.AddToPurchased(c)
+			a.AddToList(c, "purchased")
+		})
+		authenticated.DELETE("/purchased/:itemId", func(c *gin.Context) {
+			a.RemoveItemFromList(c, "purchased")
+		})
+		authenticated.DELETE("/purchased", func(c *gin.Context) {
+			a.RemoveAllFromList(c, "purchased")
 		})
 	}
 

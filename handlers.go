@@ -3,29 +3,35 @@ package main
 import (
 	"context"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"net/http"
 	"time"
-	"github.com/google/uuid"
 )
 
 //-----------------------------------------------------------------------------
-// Watchlist handlers
+// General handlers
 
-func (a *App) GetWatchlist(c *gin.Context) {
+func (a *App) GetAllFromList(c *gin.Context, listType string) {
 	publicID, _ := c.Get("public_id")
-	document, err := a.getListDocument(publicID.(string), "watchlist")
+	document, err := a.getListDocument(publicID.(string), listType)
+	m := "Could not find any " + listType + " for current user"
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"message": "Could not find any watchlist items"})
+		c.JSON(http.StatusNotFound, gin.H{"message": m})
 		return
 	}
 
-	response := WatchlistResponse{Watchlist: document.Items}
-	c.JSON(http.StatusOK, response)
+	listOfItemIds := make([]string, len(document.ItemIds))
+	for i, pId := range document.ItemIds {
+		listOfItemIds[i] = pId
+	}
+
+	c.JSON(http.StatusOK, gin.H{listType: listOfItemIds})
 }
 
-func (a *App) AddToWatchlist(c *gin.Context) {
+func (a *App) AddToList(c *gin.Context, listType string) {
+	//TODO: Change to accept array of items?
 	var req UUIDRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Check ya inputs mate. Yer not valid, Jason"})
@@ -37,89 +43,27 @@ func (a *App) AddToWatchlist(c *gin.Context) {
 		return
 	}
 
-	publicID, _ := c.Get("public_id")
-	err := a.addToList(publicID.(string), "watchlist", req.UUID)
-	if err != nil {
-		a.Log.Error().Err(err).Msg("Error adding to watchlist")
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Internal server error"})
-		return
-	}
-
-	c.JSON(http.StatusCreated, gin.H{})
-}
-
-func (a *App) RemoveFromWatchlist(c *gin.Context) {
-	var req UUIDRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Check ya inputs mate. Yer not valid, Jason"})
-		return
-	}
-
-	publicID, _ := c.Get("public_id")
-	err := a.removeFromList(publicID.(string), "watchlist", req.UUID)
-	if err != nil {
-		c.JSON(http.StatusNoContent, gin.H{})
-		return
-	}
-
-	c.JSON(http.StatusNoContent, gin.H{})
-}
-
-//-----------------------------------------------------------------------------
-// Favourites handlers
-
-func (a *App) GetFavourites(c *gin.Context) {
-	publicID, _ := c.Get("public_id")
-	document, err := a.getListDocument(publicID.(string), "favourites")
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"message": "Could not find any favourites"})
-		return
-	}
-
-	favourites := make([]FavouriteItem, len(document.Items))
-	for i, uuid := range document.Items {
-		favourites[i] = FavouriteItem{
-			Username: "user_" + uuid[:8], // Placeholder - in real app, fetch username
-			PublicID: uuid,
-		}
-	}
-
-	response := FavouritesResponse{Favourites: favourites}
-	c.JSON(http.StatusOK, response)
-}
-
-func (a *App) AddToFavourites(c *gin.Context) {
-	var req UUIDRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Check ya inputs mate. Yer not valid, Jason"})
-		return
-	}
-
-	if !IsValidUUID(req.UUID) {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid UUID format"})
-		return
-	}
-
-	publicID, _ := c.Get("public_id")
-	err := a.addToList(publicID.(string), "favourites", req.UUID)
+	publicId, _ := c.Get("public_id")
+	err := a.addToList(publicId.(string), listType, req.UUID)
 	if err != nil {
 		a.Log.Error().Err(err).Msg("Error adding to favourites")
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Internal server error"})
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{})
+	c.JSON(http.StatusCreated, gin.H{"message": "Created"})
 }
 
-func (a *App) RemoveFromFavourites(c *gin.Context) {
-	var req UUIDRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Check ya inputs mate. Yer not valid, Jason"})
+func (a *App) RemoveItemFromList(c *gin.Context, listType string) {
+	itemId, err := uuid.Parse(c.Param("itemId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request"})
+		a.Log.Info().Msgf("Not a uuid string: [%s]", err.Error())
 		return
 	}
 
 	publicID, _ := c.Get("public_id")
-	err := a.removeFromList(publicID.(string), "favourites", req.UUID)
+	err = a.removeFromList(publicID.(string), listType, itemId.String())
 	if err != nil {
 		c.JSON(http.StatusNoContent, gin.H{})
 		return
@@ -128,137 +72,16 @@ func (a *App) RemoveFromFavourites(c *gin.Context) {
 	c.JSON(http.StatusNoContent, gin.H{})
 }
 
-//-----------------------------------------------------------------------------
-// Recently viewed handlers
-
-func (a *App) GetRecentlyViewed(c *gin.Context) {
-	publicID, _ := c.Get("public_id")
-	document, err := a.getListDocument(publicID.(string), "viewed")
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"message": "Could not find any recently viewed items"})
-		return
-	}
-
-	response := ViewedResponse{RecentlyViewed: document.Items}
-	c.JSON(http.StatusOK, response)
-}
-
-func (a *App) AddToRecentlyViewed(c *gin.Context) {
-	var req UUIDRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Check ya inputs mate. Yer not valid, Jason"})
-		return
-	}
-
-	if !IsValidUUID(req.UUID) {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid UUID format"})
-		return
-	}
+func (a *App) RemoveAllFromList(c *gin.Context, listType string) {
 
 	publicID, _ := c.Get("public_id")
-	err := a.addToList(publicID.(string), "viewed", req.UUID)
+	err := a.removeFromList(publicID.(string), listType, "")
 	if err != nil {
-		a.Log.Error().Err(err).Msg("Error adding to recently viewed")
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Internal server error"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{})
-}
-
-//-----------------------------------------------------------------------------
-// Recent bids handlers
-
-func (a *App) GetRecentBids(c *gin.Context) {
-	publicID, _ := c.Get("public_id")
-	document, err := a.getListDocument(publicID.(string), "recentbids")
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"message": "Could not find any recent bids"})
-		return
-	}
-
-	bids := make([]BidItem, len(document.Items))
-	for i, uuid := range document.Items {
-		bids[i] = BidItem{
-			AuctionID: uuid,
-			LotID:     uuid,
-			ItemID:    uuid,
-		}
-	}
-
-	response := RecentBidsResponse{RecentBids: bids}
-	c.JSON(http.StatusOK, response)
-}
-
-func (a *App) AddToRecentBids(c *gin.Context) {
-	var req UUIDRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Check ya inputs mate. Yer not valid, Jason"})
-		return
-	}
-
-	if !IsValidUUID(req.UUID) {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid UUID format"})
-		return
-	}
-
-	publicID, _ := c.Get("public_id")
-	err := a.addToList(publicID.(string), "recentbids", req.UUID)
-	if err != nil {
-		a.Log.Error().Err(err).Msg("Error adding to recent bids")
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Internal server error"})
-		return
-	}
-
-	c.JSON(http.StatusCreated, gin.H{})
-}
-
-//-----------------------------------------------------------------------------
-// Purchase history handlers
-
-func (a *App) GetPurchased(c *gin.Context) {
-	publicID, _ := c.Get("public_id")
-	document, err := a.getListDocument(publicID.(string), "purchased")
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"message": "Could not find any list of purchases"})
-		return
-	}
-
-	purchases := make([]PurchasedItem, len(document.Items))
-	for i, uuid := range document.Items {
-		purchases[i] = PurchasedItem{
-			PurchaseID: uuid,
-			AuctionID:  uuid,
-			LotID:      uuid,
-			ItemID:     uuid,
-		}
-	}
-
-	response := PurchasedResponse{Purchased: purchases}
-	c.JSON(http.StatusOK, response)
-}
-
-func (a *App) AddToPurchased(c *gin.Context) {
-	var req UUIDRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Check ya inputs mate. Yer not valid, Jason"})
-		return
-	}
-
-	if !IsValidUUID(req.UUID) {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid UUID format"})
-		return
-	}
-
-	publicID, _ := c.Get("public_id")
-	err := a.addToList(publicID.(string), "purchased", req.UUID)
-	if err != nil {
-		a.Log.Error().Err(err).Msg("Error adding to purchased")
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Internal server error"})
-		return
-	}
-
-	c.JSON(http.StatusCreated, gin.H{})
+	c.JSON(http.StatusGone, gin.H{})
 }
 
 //-----------------------------------------------------------------------------
@@ -282,7 +105,7 @@ func (a *App) GetWatchingCount(c *gin.Context) {
 	defer cancel()
 
 	collection := a.GetCollection("watchlist")
-	filter := bson.M{"items": safeItemID}
+	filter := bson.M{"item_ids": safeItemID}
 
 	count, err := collection.CountDocuments(ctx, filter)
 	if err != nil {
@@ -326,28 +149,28 @@ func (a *App) addToList(publicID, listType, uuid string) error {
 	if err == mongo.ErrNoDocuments {
 		newDocument := UserList{
 			ID:        publicID,
-			ListType:  listType,
-			Items:     []string{uuid},
+			ItemIds:   []string{uuid},
 			CreatedAt: now,
 			UpdatedAt: now,
 		}
 
-		_, err = collection.InsertOne(ctx, newDocument)
-		return err
+		listId, er2 := collection.InsertOne(ctx, newDocument)
+		a.Log.Info().Interface("listId", listId).Send()
+		return er2
 	} else if err != nil {
 		return err
 	}
 
-	for _, existingUUID := range document.Items {
+	for _, existingUUID := range document.ItemIds {
 		if existingUUID == uuid {
-			return nil // Already exists, no need to add
+			return nil
 		}
 	}
 
-	document.Items = append([]string{uuid}, document.Items...)
+	document.ItemIds = append([]string{uuid}, document.ItemIds...)
 
-	if len(document.Items) > 50 {
-		document.Items = document.Items[:50]
+	if len(document.ItemIds) > 50 {
+		document.ItemIds = document.ItemIds[:50]
 	}
 
 	document.UpdatedAt = now
@@ -355,7 +178,7 @@ func (a *App) addToList(publicID, listType, uuid string) error {
 	filter := bson.M{"_id": publicID}
 	update := bson.M{
 		"$set": bson.M{
-			"items":      document.Items,
+			"item_ids":   document.ItemIds,
 			"updated_at": document.UpdatedAt,
 		},
 	}
@@ -364,35 +187,50 @@ func (a *App) addToList(publicID, listType, uuid string) error {
 	return err
 }
 
-func (a *App) removeFromList(publicID, listType, uuid string) error {
+func (a *App) removeFromList(publicID, listType, itemId string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	collection := a.GetCollection(listType)
+	filter := bson.M{"_id": publicID}
 
-	document, err := a.getListDocument(publicID, listType)
-	if err != nil {
+	if itemId == "" {
+
+		// delete all of listType for the current user
+		_, err := collection.DeleteOne(ctx, filter)
+		return err
+
+	} else {
+
+		document, err := a.getListDocument(publicID, listType)
+		if err != nil {
+			return err
+		}
+
+		newItems := make([]string, 0, len(document.ItemIds))
+		for _, existingUUID := range document.ItemIds {
+			if existingUUID != itemId {
+				newItems = append(newItems, existingUUID)
+			}
+		}
+
+		if len(newItems) == 0 {
+			// if no more items delete whole record
+			_, err = collection.DeleteOne(ctx, filter)
+			return err
+		}
+
+		document.ItemIds = newItems
+		document.UpdatedAt = time.Now()
+
+		update := bson.M{
+			"$set": bson.M{
+				"item_ids":   document.ItemIds,
+				"updated_at": document.UpdatedAt,
+			},
+		}
+
+		_, err = collection.UpdateOne(ctx, filter, update)
 		return err
 	}
-
-	newItems := make([]string, 0, len(document.Items))
-	for _, existingUUID := range document.Items {
-		if existingUUID != uuid {
-			newItems = append(newItems, existingUUID)
-		}
-	}
-
-	document.Items = newItems
-	document.UpdatedAt = time.Now()
-
-	filter := bson.M{"_id": publicID}
-	update := bson.M{
-		"$set": bson.M{
-			"items":      document.Items,
-			"updated_at": document.UpdatedAt,
-		},
-	}
-
-	_, err = collection.UpdateOne(ctx, filter, update)
-	return err
 }
