@@ -13,8 +13,7 @@ func (a *App) JSONOnlyMiddleware() gin.HandlerFunc {
 		if c.Request.Method != "GET" {
 			contentType := c.GetHeader("Content-Type")
 			if contentType != "application/json" && contentType != "application/json; charset=UTF-8" {
-				c.JSON(http.StatusBadRequest, gin.H{"message": "Content-Type must be application/json"})
-				c.Abort()
+				c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "Content-Type must be application/json"})
 				return
 			}
 		}
@@ -22,13 +21,10 @@ func (a *App) JSONOnlyMiddleware() gin.HandlerFunc {
 	}
 }
 
-// AuthMiddleware validates authentication by calling the poptape-authy microservice
-// It checks for X-Access-Token header and makes a GET request to AUTHYURL
-// On success, it extracts the public_id from the response and sets it in context
 func (a *App) AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Check for X-Access-Token header
 		accessToken := c.GetHeader("X-Access-Token")
+		a.Log.Info().Msgf("accessToken is [%s]", accessToken)
 		if accessToken == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "Authentication required - missing X-Access-Token header"})
 			c.Abort()
@@ -53,6 +49,7 @@ func (a *App) AuthMiddleware() gin.HandlerFunc {
 		}
 
 		req.Header.Set("X-Access-Token", accessToken)
+		req.Header.Set("Content-Type", "application/json")
 
 		resp, err := client.Do(req)
 		if err != nil {
@@ -65,6 +62,14 @@ func (a *App) AuthMiddleware() gin.HandlerFunc {
 
 		if resp.StatusCode != http.StatusOK {
 			a.Log.Warn().Int("status", resp.StatusCode).Msg("Authentication failed")
+			var bd interface{}
+			//if err = c.ShouldBindBodyWith(&bd, binding.JSON); err != nil {
+			//	a.Log.Info().Msgf("error is [%s]", err.Error())
+			//}
+			if err := json.NewDecoder(resp.Body).Decode(&bd); err != nil {
+				a.Log.Info().Msgf("error is [%s]", err.Error())
+			}
+			a.Log.Info().Msgf("message is [%s]", bd)
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid or expired token"})
 			c.Abort()
 			return

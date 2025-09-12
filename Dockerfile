@@ -25,8 +25,8 @@ RUN go mod download
 RUN CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -a -ldflags '-w' -o lister
 
 # Final stage - use busybox for smaller image and better compatibility
-#FROM busybox:latest
-FROM alpine:latest
+FROM busybox:latest
+#FROM alpine:latest
 
 # Set working directory
 RUN mkdir -p /lister
