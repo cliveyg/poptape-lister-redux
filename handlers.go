@@ -271,12 +271,15 @@ func (a *App) GetWatchingCount(c *gin.Context) {
 		return
 	}
 
+	// Ensure itemID is a string for the BSON filter and cannot be interpreted as a JSON object.
+	safeItemID := itemID // enforce as string
+
 	// Count how many users have this item in their watchlist
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	collection := a.GetCollection("watchlist")
-	filter := bson.M{"items": itemID}
+	filter := bson.M{"items": safeItemID}
 
 	count, err := collection.CountDocuments(ctx, filter)
 	if err != nil {
