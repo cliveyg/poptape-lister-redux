@@ -7,6 +7,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"net/http"
 	"time"
+	"github.com/google/uuid"
 )
 
 //-----------------------------------------------------------------------------
@@ -266,13 +267,15 @@ func (a *App) AddToPurchased(c *gin.Context) {
 func (a *App) GetWatchingCount(c *gin.Context) {
 	itemID := c.Param("item_id")
 
-	if !IsValidUUID(itemID) {
+	// Strong validation using github.com/google/uuid
+	parsedID, err := uuid.Parse(itemID)
+	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid item ID format"})
 		return
 	}
 
-	// Ensure itemID is a string for the BSON filter and cannot be interpreted as a JSON object.
-	safeItemID := itemID // enforce as string
+	// Only use the canonical string form provided by google/uuid
+	safeItemID := parsedID.String()
 
 	// Count how many users have this item in their watchlist
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
