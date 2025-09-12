@@ -19,7 +19,7 @@ Please see [this gist](https://gist.github.com/cliveyg/cf77c295e18156ba74cda4694
 
 ### Authenticated Routes
 
-All authenticated routes require an `X-Public-ID` header containing a valid UUID (in production, this would be extracted from JWT tokens).
+All authenticated routes require an `X-Access-Token` header containing a valid UUID (in production, this would be extracted from JWT tokens).
 
 #### Watchlist Management
 ```
@@ -112,14 +112,14 @@ Add or remove favourite sellers.
 
 #### Recent Bids
 ```
-GET /list/recentbids
+GET /list/bids
 ```
 Returns the user's recent bids.
 
 Example response:
 ```json
 {
-    "recent_bids": [
+    "bids": [
         {
             "auction_id": "a47cdbb5-2e45-4aef-af71-82736351f049",
             "lot_id": "2a99371f-4188-49b8-a628-85e946540364",
@@ -130,7 +130,7 @@ Example response:
 ```
 
 ```
-POST /list/recentbids
+POST /list/bids
 ```
 Add a recent bid record.
 

@@ -61,10 +61,10 @@ func (a *App) initialiseRoutes() {
 		})
 
 		// Recent bids routes
-		authenticated.GET("/recentbids", func(c *gin.Context) {
+		authenticated.GET("/bids", func(c *gin.Context) {
 			a.GetRecentBids(c)
 		})
-		authenticated.POST("/recentbids", func(c *gin.Context) {
+		authenticated.POST("/bids", func(c *gin.Context) {
 			a.AddToRecentBids(c)
 		})
 
