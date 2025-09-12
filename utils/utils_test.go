@@ -1,13 +1,12 @@
 package utils
 
 import (
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"os"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestGenerateRandomString(t *testing.T) {
@@ -288,10 +287,10 @@ func TestStringToInt(t *testing.T) {
 func TestStringToFloat(t *testing.T) {
 	t.Run("should convert valid floats", func(t *testing.T) {
 		tests := map[string]float64{
-			"123.45": 123.45,
+			"123.45":  123.45,
 			"-456.78": -456.78,
-			"0": 0.0,
-			"123": 123.0,
+			"0":       0.0,
+			"123":     123.0,
 		}
 
 		for input, expected := range tests {
@@ -336,7 +335,7 @@ func TestParseRFC3339(t *testing.T) {
 		input := "2023-12-25T15:30:45Z"
 		result, err := ParseRFC3339(input)
 		require.NoError(t, err)
-		
+
 		expected := time.Date(2023, 12, 25, 15, 30, 45, 0, time.UTC)
 		assert.True(t, result.Equal(expected))
 	})
@@ -430,7 +429,7 @@ func TestGetEnvOrDefault(t *testing.T) {
 	t.Run("should return default when environment variable not set", func(t *testing.T) {
 		key := "NON_EXISTENT_VAR"
 		defaultValue := "default_value"
-		
+
 		result := GetEnvOrDefault(key, defaultValue)
 		assert.Equal(t, defaultValue, result)
 	})
@@ -457,7 +456,7 @@ func TestGetEnvAsInt(t *testing.T) {
 
 	t.Run("should return default when variable not set", func(t *testing.T) {
 		key := "NON_EXISTENT_INT_VAR"
-		
+
 		result := GetEnvAsInt(key, 100)
 		assert.Equal(t, 100, result)
 	})
@@ -495,17 +494,17 @@ func TestGetEnvAsBool(t *testing.T) {
 		for value, expected := range tests {
 			key := "TEST_BOOL_VAR"
 			os.Setenv(key, value)
-			
+
 			result := GetEnvAsBool(key, false)
 			assert.Equal(t, expected, result, "Failed for value: %s", value)
-			
+
 			os.Unsetenv(key)
 		}
 	})
 
 	t.Run("should return default when variable not set", func(t *testing.T) {
 		key := "NON_EXISTENT_BOOL_VAR"
-		
+
 		result := GetEnvAsBool(key, true)
 		assert.Equal(t, true, result)
 	})

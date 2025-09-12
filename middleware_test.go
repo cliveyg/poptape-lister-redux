@@ -1,15 +1,14 @@
 package main
 
 import (
+	"github.com/gin-gonic/gin"
+	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/assert"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
-
-	"github.com/gin-gonic/gin"
-	"github.com/rs/zerolog"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestMiddleware(t *testing.T) {
