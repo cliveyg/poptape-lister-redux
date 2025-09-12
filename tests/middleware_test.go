@@ -1,6 +1,7 @@
-package main
+package tests
 
 import (
+	"github.com/cliveyg/poptape-lister-redux"
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -14,7 +15,7 @@ import (
 func TestMiddleware(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
-	app := &App{Log: &logger}
+	app := &main.App{Log: &logger}
 
 	t.Run("JSONOnlyMiddleware", func(t *testing.T) {
 		t.Run("should allow GET requests without JSON content type", func(t *testing.T) {
