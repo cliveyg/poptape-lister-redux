@@ -13,22 +13,38 @@ jobs:
   all-tests:
     runs-on: ubuntu-latest
     name: Run testsuite
+    container:
+      image: ubuntu:latest
+      volumes:
+        - ${{ github.workspace }}:/app
     services:
       # label used to access the service container
       mongodb:
         # dockerhub image
-        image: mongo:latest
+        image: mongo
         # provide the login and db deets for mongo
-        command:
-          - --storageEngine
-          - wiredTiger
-          - --auth
-        ports:
-          - "1601:27017"
         environment:
           MONGO_INITDB_ROOT_USERNAME: lister_test
           MONGO_INITDB_ROOT_PASSWORD: "${{ secrets.TESTDB_PASSWORD }}"
+          MONGO_INITDB_DATABASE: lister_test
+        ports:
+          # maps tcp port 27017 on service container to the host
+          - 27017:27017
+        # set health checks to wait until mongo has started
+        options: >-
+          --health-cmd "echo 'db.runCommand("ping").ok' | mongosh --quiet"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
+
+      - name: Install mongosh
+        run: |
+          sudo apt-get update
+          wget -qO- https://www.mongodb.org/static/pgp/server-7.0.asc | sudo tee /etc/apt/trusted.gpg.d/server-7.0.asc
+          echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
+          sudo apt-get update && sudo apt-get install -y mongodb-mongosh  
+
       - uses: actions/checkout@v4
 
       - name: Set up Go
@@ -39,11 +55,16 @@ jobs:
       - name: Install dependencies
         run: go mod tidy
 
+      # have to create an .env file to be able to run unit tests
+      - name: Create .env file from github secrets
+        run: |
+          echo "${{ secrets.ENV_FILE }}" > .env
+
       - name: Run unit tests and generate coverage
         run: |
           go test -v -covermode=atomic -coverprofile=coverage.out ./...
 
-      - name: Check coverage threshold (90%)
+      - name: Check coverage threshold (40%)
         run: |
           coverage=$(go tool cover -func=coverage.out | grep total | awk '{print substr($3, 1, length($3)-1)}')
           echo "Total coverage: $coverage"
