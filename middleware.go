@@ -5,17 +5,22 @@ import (
 	"github.com/gin-gonic/gin"
 	"net/http"
 	"os"
+	"strings"
 )
 
 // JSONOnlyMiddleware ensures only JSON requests are processed
 func (a *App) JSONOnlyMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if c.Request.Method != "GET" {
-			contentType := c.GetHeader("Content-Type")
-			if contentType != "application/json" && contentType != "application/json; charset=UTF-8" {
-				c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "Content-Type must be application/json"})
-				return
-			}
+		method := c.Request.Method
+		if method == http.MethodHead || method == http.MethodOptions {
+			c.Next()
+			return
+		}
+		// For other methods, enforce Content-Type: application/json (accept variations)
+		ct := c.GetHeader("Content-Type")
+		if !strings.HasPrefix(ct, "application/json") {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Content-Type must be application/json"})
+			return
 		}
 		c.Next()
 	}

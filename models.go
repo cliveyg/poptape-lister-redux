@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/google/uuid"
+	"regexp"
 	"time"
 )
 
@@ -73,7 +73,8 @@ type StatusResponse struct {
 //-----------------------------------------------------------------------------
 // Helper function to validate UUID
 
+var uuidRegex = regexp.MustCompile(`^[a-fA-F0-9]{8}\-[a-fA-F0-9]{4}\-[a-fA-F0-9]{4}\-[a-fA-F0-9]{4}\-[a-fA-F0-9]{12}$`)
+
 func IsValidUUID(u string) bool {
-	_, err := uuid.Parse(u)
-	return err == nil
+	return len(u) == 36 && uuidRegex.MatchString(u)
 }
