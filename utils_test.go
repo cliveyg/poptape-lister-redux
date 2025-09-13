@@ -26,10 +26,11 @@ func TestGenerateRandomString(t *testing.T) {
 	})
 
 	t.Run("should handle odd lengths", func(t *testing.T) {
-		result, err := utils.GenerateRandomString(15)
-		assert.NoError(t, err)
-		// For odd lengths, the hex string will be length-1 due to hex encoding
-		assert.Len(t, result, 14)
+		for _, n := range []int{13, 15, 17, 19} {
+			result, err := utils.GenerateRandomString(n)
+			assert.NoError(t, err)
+			assert.Len(t, result, n)
+		}
 	})
 
 	t.Run("should handle zero length", func(t *testing.T) {
