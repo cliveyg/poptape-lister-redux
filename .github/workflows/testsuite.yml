@@ -56,19 +56,67 @@ jobs:
         run: |
           echo "${{ secrets.ENV_FILE }}" > .env
 
-      - name: Run unit tests and generate coverage
+      # run all tests
+      - name: Run go test and generate test coverage file
         run: |
-          go test -v -covermode=atomic -coverprofile=coverage.out ./...
+          set -e
+          set -o pipefail
+          touch poptape_lister.log
+          go test -v ./... -cover -coverprofile=./cover.out | tee test.out
+        shell: bash
 
-      - name: Check coverage threshold (40%)
+      # and check test coverage percentage
+      - name: Check test coverage is above threshold
+        env:
+          TESTCOVERAGE_THRESHOLD: 45
         run: |
-          coverage=$(go tool cover -func=coverage.out | grep total | awk '{print substr($3, 1, length($3)-1)}')
-          echo "Total coverage: $coverage"
-          cov_int=${coverage%.*}
-          if [ "$cov_int" -lt 40 ]; then
-            echo "Coverage $coverage is below 40%"
-            exit 1
+          echo "Checking test coverage is above threshold..."
+          echo "Threshold             : $TESTCOVERAGE_THRESHOLD %"
+          totalCoverage=`go tool cover -func=cover.out | grep total | grep -Eo '[0-9]+\.[0-9]+'`
+          echo "Current test coverage : $totalCoverage %"
+          echo "-----------------------------------------------------------"
+          if awk "BEGIN {exit !($totalCoverage >= $TESTCOVERAGE_THRESHOLD)}";
+          then
+              echo "Coverage passed threshold OK"
+          else
+              echo "Current test coverage is below threshold. Please add more unit tests or adjust threshold to a lower value."
+              echo "Failed"
+              exit 1
           fi
+          echo "-----------------------------------------------------------"
+      - name: List missed coverage lines
+        shell: bash
+        run: |
+          go test -coverprofile=coverage.out ./...
+          echo "Missed lines:"
+          awk '
+            BEGIN { OFS=" " }
+            /^mode:/ { next }
+            {
+              for (i = 1; i <= NF; i += 4) {
+                block = $i
+                stmts = $(i+1)
+                count = $(i+2)
+                if (count == "0") {
+                  split(block, parts, ":")
+                  file = parts[1]
+                  rest = parts[2]
+                  split(rest, lines, ",")
+                  start = lines[1]
+                  end = lines[2]
+                  split(start, start_parts, ".")
+                  split(end, end_parts, ".")
+                  start_line = start_parts[1]
+                  end_line = end_parts[1]
+                  if (start_line == end_line) {
+                    print file ":" start_line
+                  } else {
+                    print file ":" start_line "-" end_line
+                  }
+                }
+              }
+            }
+          ' coverage.out
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
