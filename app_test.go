@@ -1,7 +1,6 @@
-package tests
+package main
 
 import (
-	"github.com/cliveyg/poptape-lister-redux"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"os"
@@ -11,7 +10,7 @@ import (
 func TestApp_NewApp(t *testing.T) {
 	t.Run("should create new app instance", func(t *testing.T) {
 		logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
-		app := &main.App{
+		app := &App{
 			Log: &logger,
 		}
 
@@ -23,7 +22,7 @@ func TestApp_NewApp(t *testing.T) {
 func TestApp_MockableFunctions(t *testing.T) {
 	t.Run("should create app with basic structure", func(t *testing.T) {
 		logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
-		app := &main.App{
+		app := &App{
 			Log: &logger,
 		}
 
@@ -38,7 +37,7 @@ func TestApp_MockableFunctions(t *testing.T) {
 func TestApp_Run_ErrorHandling(t *testing.T) {
 	t.Run("should handle invalid address format", func(t *testing.T) {
 		logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
-		app := &main.App{
+		app := &App{
 			Log: &logger,
 		}
 

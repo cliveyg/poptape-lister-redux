@@ -1,11 +1,10 @@
-package tests
+package main
 
 import (
 	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/cliveyg/poptape-lister-redux"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -27,7 +26,7 @@ import (
 // APITestSuite defines the test suite structure
 type APITestSuite struct {
 	suite.Suite
-	app    *main.App
+	app    *App
 	router *gin.Engine
 }
 
@@ -80,7 +79,7 @@ func (suite *APITestSuite) SetupTest() {
 
 	// Create app without MongoDB dependencies for unit testing
 	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
-	suite.app = &main.App{
+	suite.app = &App{
 		Log: &logger,
 	}
 
@@ -124,7 +123,7 @@ func (suite *APITestSuite) setupTestRoutes() {
 		}
 
 		// Mock response for testing
-		response := main.WatchingResponse{PeopleWatching: 5}
+		response := WatchingResponse{PeopleWatching: 5}
 		c.JSON(http.StatusOK, response)
 	})
 
@@ -138,13 +137,13 @@ func (suite *APITestSuite) setupTestRoutes() {
 	})
 
 	authGroup.POST("/watchlist", func(c *gin.Context) {
-		var req main.UUIDRequest
+		var req UUIDRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Check ya inputs mate. Yer not valid, Jason"})
 			return
 		}
 
-		if !main.IsValidUUID(req.UUID) {
+		if !IsValidUUID(req.UUID) {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid UUID format"})
 			return
 		}
@@ -174,13 +173,13 @@ func (suite *APITestSuite) setupTestRoutes() {
 		})
 
 		authGroup.POST("/"+listType, func(c *gin.Context) {
-			var req main.UUIDRequest
+			var req UUIDRequest
 			if err := c.ShouldBindJSON(&req); err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{"message": "Check ya inputs mate. Yer not valid, Jason"})
 				return
 			}
 
-			if !main.IsValidUUID(req.UUID) {
+			if !IsValidUUID(req.UUID) {
 				c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid UUID format"})
 				return
 			}
@@ -265,8 +264,8 @@ func (suite *APITestSuite) parseResponseBody(resp *httptest.ResponseRecorder) ma
 }
 
 // createUserList creates a test UserList document
-func (suite *APITestSuite) createUserList(itemIds []string) main.UserList {
-	return main.UserList{
+func (suite *APITestSuite) createUserList(itemIds []string) UserList {
+	return UserList{
 		ID:        testPublicID,
 		ItemIds:   itemIds,
 		CreatedAt: time.Now(),
@@ -535,15 +534,15 @@ func (suite *APITestSuite) TestAllRoutesCovered() {
 func (suite *APITestSuite) TestHelperFunctions() {
 	suite.Run("should validate UUID format correctly", func() {
 		// Test valid UUIDs
-		assert.True(suite.T(), main.IsValidUUID(testItemID))
-		assert.True(suite.T(), main.IsValidUUID(testPublicID))
-		assert.True(suite.T(), main.IsValidUUID(uuid.New().String()))
+		assert.True(suite.T(), IsValidUUID(testItemID))
+		assert.True(suite.T(), IsValidUUID(testPublicID))
+		assert.True(suite.T(), IsValidUUID(uuid.New().String()))
 
 		// Test invalid UUIDs
-		assert.False(suite.T(), main.IsValidUUID(""))
-		assert.False(suite.T(), main.IsValidUUID("invalid"))
-		assert.False(suite.T(), main.IsValidUUID("123"))
-		assert.False(suite.T(), main.IsValidUUID("not-a-uuid-at-all"))
+		assert.False(suite.T(), IsValidUUID(""))
+		assert.False(suite.T(), IsValidUUID("invalid"))
+		assert.False(suite.T(), IsValidUUID("123"))
+		assert.False(suite.T(), IsValidUUID("not-a-uuid-at-all"))
 	})
 }
 

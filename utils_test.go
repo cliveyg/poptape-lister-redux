@@ -1,4 +1,4 @@
-package tests
+package main
 
 import (
 	"github.com/cliveyg/poptape-lister-redux/utils"

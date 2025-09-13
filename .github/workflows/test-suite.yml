@@ -6,11 +6,28 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  schedule:
+    - cron: '0 11 * * 1' # run "At 11:00 on Monday"
 
 jobs:
   all-tests:
     runs-on: ubuntu-latest
     name: Run testsuite
+    services:
+      # label used to access the service container
+      mongodb:
+        # dockerhub image
+        image: mongo:latest
+        # provide the login and db deets for mongo
+        command:
+          - --storageEngine
+          - wiredTiger
+          - --auth
+        ports:
+          - "1601:27017"
+        environment:
+          MONGO_INITDB_ROOT_USERNAME: lister_test
+          MONGO_INITDB_ROOT_PASSWORD: "${{ secrets.TESTDB_PASSWORD }}"
     steps:
       - uses: actions/checkout@v4
 
