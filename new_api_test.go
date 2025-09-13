@@ -34,13 +34,13 @@ func (suite *NewAPITestSuite) SetupSuite() {
 	gin.SetMode(gin.TestMode)
 	httpmock.Activate()
 
-	// Try to setup MongoDB for integration tests, but don't fail if unavailable
+
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
 	mongoURI := os.Getenv("MONGO_URI")
 	if mongoURI == "" {
-		mongoURI = "mongodb://localhost:27017"
+		suite.T().Skip("MONGO_URI not set; skipping MongoDB integration tests")
 	}
 
 	clientOptions := options.Client().ApplyURI(mongoURI)
