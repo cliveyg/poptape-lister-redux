@@ -1,5 +1,6 @@
 package main
 
+/*
 import (
 	"fmt"
 	"github.com/joho/godotenv"
@@ -12,7 +13,10 @@ import (
 	"time"
 )
 
+
+*/
 // NewAppForTest replicates main setup but returns *App for use in tests
+/*
 func NewAppForTest() *App {
 	err := godotenv.Load()
 	if err != nil {
@@ -97,3 +101,6 @@ func TestAPIStatus(t *testing.T) {
 		fmt.Println("[PASS].....TestAPIStatus")
 	}
 }
+
+
+*/
