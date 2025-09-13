@@ -55,6 +55,10 @@ jobs:
       - name: Create .env file from github secrets
         run: |
           echo "${{ secrets.ENV_FILE }}" > .env
+          
+      - name: Override MONGO_URI for CI
+        run: |
+          echo "MONGO_URI=mongodb://lister_test:${{ secrets.TESTDB_PASSWORD }}@mongodb:27017/lister_test?authSource=admin" >> .env
 
       # run all tests
       - name: Run go test and generate test coverage file

@@ -16,12 +16,14 @@ import (
 // Random and UUID utilities
 
 // GenerateRandomString generates a random hex string of specified length
-func GenerateRandomString(length int) (string, error) {
-	bytes := make([]byte, length/2)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", err
+func GenerateRandomString(n int) string {
+	b := make([]byte, (n+1)/2)
+	_, err := rand.Read(b)
+	if err != nil {
+		return ""
 	}
-	return hex.EncodeToString(bytes), nil
+	s := hex.EncodeToString(b)
+	return s[:n] // always trim to n
 }
 
 // GenerateUUID creates a new UUID string
