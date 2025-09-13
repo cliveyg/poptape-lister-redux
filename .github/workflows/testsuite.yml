@@ -11,19 +11,15 @@ on:
 
 jobs:
   all-tests:
-    runs-on: ubuntu-latest
     name: Run testsuite
-    container:
-      image: ubuntu:latest
-      volumes:
-        - ${{ github.workspace }}:/app
+    runs-on: ubuntu-latest
     services:
       # label used to access the service container
       mongodb:
         # dockerhub image
         image: mongo
         # provide the login and db deets for mongo
-        environment:
+        env:
           MONGO_INITDB_ROOT_USERNAME: lister_test
           MONGO_INITDB_ROOT_PASSWORD: "${{ secrets.TESTDB_PASSWORD }}"
           MONGO_INITDB_DATABASE: lister_test
