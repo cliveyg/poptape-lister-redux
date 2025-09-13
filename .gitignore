@@ -8,6 +8,7 @@
 *.so
 *.dylib
 lister
+poptape-lister-redux
 
 # Test binary, built with `go test -c`
 *.test

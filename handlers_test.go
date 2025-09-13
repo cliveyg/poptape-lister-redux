@@ -2,202 +2,223 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jarcoal/httpmock"
+	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-// HandlersTestSuite defines comprehensive unit tests for handlers without MongoDB dependency
+// HandlersTestSuite provides comprehensive handler testing with MongoDB integration
 type HandlersTestSuite struct {
 	suite.Suite
-	app         *App
-	router      *gin.Engine
-	testPublicID string
-	testItemID   string
-	testAuthURL  string
+	app    *App
+	client *mongo.Client
+	db     *mongo.Database
 }
 
 // Test constants
 const (
-	handlerTestPublicID = "550e8400-e29b-41d4-a716-446655440000"
-	handlerTestItemID   = "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
-	handlerTestToken    = "valid-handler-token"
+	handlersTestPublicID    = "test-handlers-123e4567-e89b-12d3-a456-426614174000"
+	handlersTestItemID      = "550e8400-e29b-41d4-a716-446655440000"
+	handlersTestAccessToken = "valid-handlers-test-token"
+	handlersTestAuthURL     = "http://test-auth-service:8200/authy/checkaccess/10"
 )
 
-// List types to test for handlers
 var handlerTestListTypes = []string{"watchlist", "favourites", "viewed", "bids", "purchased"}
 
-func TestHandlersSuite(t *testing.T) {
-	suite.Run(t, new(HandlersTestSuite))
-}
+// ============================================================================
+// Test Suite Setup and Teardown
+// ============================================================================
 
-// SetupSuite runs once before all tests
+// SetupSuite initializes the test environment with MongoDB
 func (suite *HandlersTestSuite) SetupSuite() {
-	suite.testPublicID = handlerTestPublicID
-	suite.testItemID = handlerTestItemID
-	suite.testAuthURL = "http://test-auth-service/validate"
-
-	// Set test environment variables
-	os.Setenv("AUTHYURL", suite.testAuthURL)
-	os.Setenv("VERSION", "test-1.0.0")
-
+	// Load environment variables
+	_ = godotenv.Load()
+	
+	// Set test mode for gin
 	gin.SetMode(gin.TestMode)
+	
+	// Setup logger
+	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
+	logger = logger.Level(zerolog.WarnLevel) // Reduce log noise during tests
 
-	// Initialize HTTP mock for auth service
+	// Try to connect to MongoDB
+	mongoURI := os.Getenv("MONGO_URI")
+	if mongoURI == "" {
+		mongoURI = "mongodb://localhost:27017/poptape_lister_test"
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
+	if err != nil {
+		suite.T().Skip("MongoDB not available, skipping integration tests")
+		return
+	}
+
+	// Test the connection
+	err = client.Ping(ctx, nil)
+	if err != nil {
+		suite.T().Skip("MongoDB not responding, skipping integration tests")
+		return
+	}
+
+	suite.client = client
+	suite.db = client.Database("poptape_lister_test")
+
+	// Create App instance
+	suite.app = &App{
+		Client: suite.client,
+		DB:     suite.db,
+		Log:    &logger,
+		Router: gin.New(),
+	}
+
+	// Setup test routes
+	suite.setupRoutes()
+	
+	// Setup HTTP mocking
 	httpmock.Activate()
 }
 
-// TearDownSuite runs once after all tests
+// TearDownSuite cleans up after all tests
 func (suite *HandlersTestSuite) TearDownSuite() {
 	httpmock.DeactivateAndReset()
 	
-	// Clean up environment
-	os.Unsetenv("AUTHYURL")
-	os.Unsetenv("VERSION")
+	if suite.client != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		suite.client.Disconnect(ctx)
+	}
 }
 
 // SetupTest runs before each individual test
 func (suite *HandlersTestSuite) SetupTest() {
+	if suite.client == nil {
+		suite.T().Skip("MongoDB not available")
+		return
+	}
+	
+	// Clean up test data before each test
+	suite.cleanupTestData()
+	
 	// Reset HTTP mocks
 	httpmock.Reset()
-
-	// Create new app instance without MongoDB dependencies
-	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
-	suite.app = &App{
-		Log: &logger,
-	}
-
-	// Initialize router
-	suite.router = gin.New()
-	suite.app.Router = suite.router
-
-	// Set up middlewares
-	suite.app.Router.Use(suite.app.CORSMiddleware())
-	suite.app.Router.Use(suite.app.JSONOnlyMiddleware())
-	suite.app.Router.Use(suite.app.LoggingMiddleware())
-	suite.app.Router.Use(suite.app.RateLimitMiddleware())
-
-	// Set up test routes that mock database operations
-	suite.setupMockRoutes()
-
-	// Setup auth service mock for successful authentication AFTER routes are set up
-	suite.setupAuthMock(suite.testPublicID, true)
 }
 
 // TearDownTest runs after each individual test
 func (suite *HandlersTestSuite) TearDownTest() {
-	// Clean up if needed
-}
-
-// setupAuthMock configures the auth service mock
-func (suite *HandlersTestSuite) setupAuthMock(publicID string, success bool) {
-	if success {
-		response := map[string]interface{}{
-			"public_id": publicID,
-			"message":   "Authentication successful",
-		}
-		httpmock.RegisterResponder("GET", suite.testAuthURL,
-			func(req *http.Request) (*http.Response, error) {
-				token := req.Header.Get("X-Access-Token")
-				if token == handlerTestToken {
-					return httpmock.NewJsonResponse(200, response)
-				}
-				return httpmock.NewJsonResponse(401, map[string]string{"message": "Invalid token"})
-			})
-	} else {
-		httpmock.RegisterResponder("GET", suite.testAuthURL,
-			httpmock.NewStringResponder(401, `{"message": "Authentication failed"}`))
+	if suite.client == nil {
+		return
 	}
+	
+	// Clean up test data after each test
+	suite.cleanupTestData()
 }
 
-// setupMockRoutes creates test routes that simulate the actual handlers
-func (suite *HandlersTestSuite) setupMockRoutes() {
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+// setupRoutes configures the test routes
+func (suite *HandlersTestSuite) setupRoutes() {
+	// Setup middleware
+	suite.app.Router.Use(func(c *gin.Context) {
+		c.Header("Content-Type", "application/json")
+		c.Next()
+	})
+
 	// Public routes (no authentication required)
-	suite.router.GET("/list/status", func(c *gin.Context) {
+	suite.app.Router.GET("/list/status", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "System running...", "version": os.Getenv("VERSION")})
 	})
 
-	// Route to get count of people watching an item (unauthenticated)
-	suite.router.GET("/list/watching/:item_id", func(c *gin.Context) {
-		itemID := c.Param("item_id")
+	suite.app.Router.GET("/list/watching/:item_id", func(c *gin.Context) {
+		suite.app.GetWatchingCount(c)
+	})
 
-		// Strong validation using github.com/google/uuid
-		_, err := uuid.Parse(itemID)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid item ID format"})
+	// Authenticated routes group
+	authenticated := suite.app.Router.Group("/list")
+	authenticated.Use(func(c *gin.Context) {
+		// Mock authentication middleware for tests
+		token := c.GetHeader("X-Access-Token")
+		if token == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "Access token is required"})
+			c.Abort()
 			return
 		}
-
-		// Mock response - in real implementation this would query database
-		response := WatchingResponse{PeopleWatching: 5}
-		c.JSON(http.StatusOK, response)
-	})
-
-	// Authenticated routes
-	authenticated := suite.router.Group("/list")
-	authenticated.Use(suite.app.AuthMiddleware())
-	{
-		// Create handlers for all list types
-		for _, listType := range handlerTestListTypes {
-			// GET handler - mock getting list
-			authenticated.GET("/"+listType, func(c *gin.Context) {
-				// Mock empty list scenario
-				m := "Could not find any " + listType + " for current user"
-				c.JSON(http.StatusNotFound, gin.H{"message": m})
-			})
-
-			// POST handler - mock adding to list
-			authenticated.POST("/"+listType, func(c *gin.Context) {
-				var req UUIDRequest
-				if err := c.ShouldBindJSON(&req); err != nil {
-					c.JSON(http.StatusBadRequest, gin.H{"message": "Check ya inputs mate. Yer not valid, Jason"})
-					return
-				}
-
-				if !IsValidUUID(req.UUID) {
-					c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid UUID format"})
-					return
-				}
-
-				c.JSON(http.StatusCreated, gin.H{"message": "Created"})
-			})
-
-			// DELETE item handler - mock removing specific item
-			authenticated.DELETE("/"+listType+"/:itemId", func(c *gin.Context) {
-				_, err := uuid.Parse(c.Param("itemId"))
-				if err != nil {
-					c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request"})
-					return
-				}
-				c.JSON(http.StatusNoContent, gin.H{})
-			})
-
-			// DELETE all handler - mock removing all items
-			authenticated.DELETE("/"+listType, func(c *gin.Context) {
-				c.JSON(http.StatusGone, gin.H{})
-			})
+		
+		if token == handlersTestAccessToken {
+			c.Set("public_id", handlersTestPublicID)
+			c.Next()
+		} else {
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid or expired token"})
+			c.Abort()
 		}
-	}
-
-	// Handle 404s
-	suite.router.NoRoute(func(c *gin.Context) {
-		c.JSON(http.StatusNotFound, gin.H{"message": "Resource not found"})
 	})
+
+	// Setup all list type routes
+	for _, listType := range handlerTestListTypes {
+		authenticated.GET("/"+listType, func(lt string) gin.HandlerFunc {
+			return func(c *gin.Context) {
+				suite.app.GetAllFromList(c, lt)
+			}
+		}(listType))
+		
+		authenticated.POST("/"+listType, func(lt string) gin.HandlerFunc {
+			return func(c *gin.Context) {
+				suite.app.AddToList(c, lt)
+			}
+		}(listType))
+		
+		authenticated.DELETE("/"+listType+"/:itemId", func(lt string) gin.HandlerFunc {
+			return func(c *gin.Context) {
+				suite.app.RemoveItemFromList(c, lt)
+			}
+		}(listType))
+		
+		authenticated.DELETE("/"+listType, func(lt string) gin.HandlerFunc {
+			return func(c *gin.Context) {
+				suite.app.RemoveAllFromList(c, lt)
+			}
+		}(listType))
+	}
 }
 
-// Helper function to make authenticated requests
-func (suite *HandlersTestSuite) makeAuthenticatedRequest(method, url string, body interface{}) *httptest.ResponseRecorder {
+// setupSuccessfulAuth mocks successful authentication
+func (suite *HandlersTestSuite) setupSuccessfulAuth() {
+	httpmock.RegisterResponder("GET", handlersTestAuthURL,
+		func(req *http.Request) (*http.Response, error) {
+			token := req.Header.Get("X-Access-Token")
+			if token != handlersTestAccessToken {
+				return httpmock.NewStringResponse(401, `{"message": "Invalid token"}`), nil
+			}
+			resp := httpmock.NewStringResponse(200, fmt.Sprintf(`{"public_id": "%s"}`, handlersTestPublicID))
+			resp.Header.Set("Content-Type", "application/json")
+			return resp, nil
+		})
+}
+
+// makeRequest creates a test HTTP request
+func (suite *HandlersTestSuite) makeRequest(method, url string, body interface{}, withAuth bool) *http.Request {
 	var req *http.Request
 	
 	if body != nil {
@@ -207,476 +228,680 @@ func (suite *HandlersTestSuite) makeAuthenticatedRequest(method, url string, bod
 	} else {
 		req = httptest.NewRequest(method, url, nil)
 	}
-	
-	req.Header.Set("X-Access-Token", handlerTestToken)
-	
-	resp := httptest.NewRecorder()
-	suite.router.ServeHTTP(resp, req)
-	return resp
+
+	if withAuth {
+		req.Header.Set("X-Access-Token", handlersTestAccessToken)
+	}
+
+	return req
 }
 
-// Helper function to make unauthenticated requests
-func (suite *HandlersTestSuite) makeUnauthenticatedRequest(method, url string, body interface{}) *httptest.ResponseRecorder {
-	var req *http.Request
-	
-	if body != nil {
-		jsonBody, _ := json.Marshal(body)
-		req = httptest.NewRequest(method, url, bytes.NewBuffer(jsonBody))
-		req.Header.Set("Content-Type", "application/json")
-	} else {
-		req = httptest.NewRequest(method, url, nil)
+// doRequest executes a test HTTP request
+func (suite *HandlersTestSuite) doRequest(req *http.Request) *httptest.ResponseRecorder {
+	w := httptest.NewRecorder()
+	suite.app.Router.ServeHTTP(w, req)
+	return w
+}
+
+// parseResponseBody parses JSON response body
+func (suite *HandlersTestSuite) parseResponseBody(resp *httptest.ResponseRecorder) map[string]interface{} {
+	var body map[string]interface{}
+	err := json.Unmarshal(resp.Body.Bytes(), &body)
+	require.NoError(suite.T(), err)
+	return body
+}
+
+// cleanupTestData removes all test data from MongoDB
+func (suite *HandlersTestSuite) cleanupTestData() {
+	if suite.client == nil {
+		return
 	}
 	
-	resp := httptest.NewRecorder()
-	suite.router.ServeHTTP(resp, req)
-	return resp
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Clean up all test collections
+	for _, listType := range handlerTestListTypes {
+		collection := suite.db.Collection(listType)
+		collection.DeleteMany(ctx, bson.M{"_id": handlersTestPublicID})
+	}
 }
 
-// Test Public Routes
+// createTestUserList creates a test UserList document
+func (suite *HandlersTestSuite) createTestUserList(listType string, itemIds []string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-func (suite *HandlersTestSuite) TestPublicRoutes() {
-	suite.Run("GET /list/status - should return system status", func() {
-		resp := suite.makeUnauthenticatedRequest("GET", "/list/status", nil)
-		
-		assert.Equal(suite.T(), http.StatusOK, resp.Code)
-		
-		var response map[string]interface{}
-		err := json.Unmarshal(resp.Body.Bytes(), &response)
-		require.NoError(suite.T(), err)
-		
-		assert.Equal(suite.T(), "System running...", response["message"])
-		assert.Equal(suite.T(), "test-1.0.0", response["version"])
-	})
+	collection := suite.db.Collection(listType)
+	now := time.Now()
+	
+	document := UserList{
+		ID:        handlersTestPublicID,
+		ItemIds:   itemIds,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
 
-	suite.Run("GET /list/watching/:item_id - should return watching count for valid UUID", func() {
-		validUUID := uuid.New().String()
-		resp := suite.makeUnauthenticatedRequest("GET", "/list/watching/"+validUUID, nil)
+	_, err := collection.InsertOne(ctx, document)
+	require.NoError(suite.T(), err)
+}
+
+// getTestUserList retrieves a test list document from MongoDB
+func (suite *HandlersTestSuite) getTestUserList(listType string) (*UserList, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	collection := suite.db.Collection(listType)
+	filter := bson.M{"_id": handlersTestPublicID}
+
+	var document UserList
+	err := collection.FindOne(ctx, filter).Decode(&document)
+	if err != nil {
+		return nil, err
+	}
+
+	return &document, nil
+}
+
+// countTestDocuments returns the count of documents matching a filter
+func (suite *HandlersTestSuite) countTestDocuments(listType string, filter bson.M) int64 {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	collection := suite.db.Collection(listType)
+	count, err := collection.CountDocuments(ctx, filter)
+	require.NoError(suite.T(), err)
+	return count
+}
+
+// ============================================================================
+// GetWatchingCount Handler Tests (Public Endpoint)
+// ============================================================================
+
+func (suite *HandlersTestSuite) TestGetWatchingCount() {
+	suite.Run("should return watching count for valid item ID", func() {
+		// Create test data with multiple users watching the same item
+		testItemID := uuid.New().String()
 		
+		// Create multiple watchlists containing the test item
+		for i := 0; i < 3; i++ {
+			userID := fmt.Sprintf("test-user-%d", i)
+			collection := suite.db.Collection("watchlist")
+			
+			document := UserList{
+				ID:        userID,
+				ItemIds:   []string{testItemID, uuid.New().String()},
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			}
+			
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			_, err := collection.InsertOne(ctx, document)
+			cancel()
+			require.NoError(suite.T(), err)
+		}
+
+		// Test the endpoint
+		url := fmt.Sprintf("/list/watching/%s", testItemID)
+		req := suite.makeRequest("GET", url, nil, false)
+		resp := suite.doRequest(req)
+
 		assert.Equal(suite.T(), http.StatusOK, resp.Code)
 		
 		var response WatchingResponse
 		err := json.Unmarshal(resp.Body.Bytes(), &response)
-		require.NoError(suite.T(), err)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), 3, response.PeopleWatching)
 		
-		assert.Equal(suite.T(), 5, response.PeopleWatching)
+		// Cleanup
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		collection := suite.db.Collection("watchlist")
+		collection.DeleteMany(ctx, bson.M{"item_ids": testItemID})
 	})
 
-	suite.Run("GET /list/watching/:item_id - should reject invalid UUID", func() {
-		resp := suite.makeUnauthenticatedRequest("GET", "/list/watching/invalid-uuid", nil)
+	suite.Run("should return zero count for non-existent item", func() {
+		nonExistentItemID := uuid.New().String()
 		
-		assert.Equal(suite.T(), http.StatusBadRequest, resp.Code)
+		url := fmt.Sprintf("/list/watching/%s", nonExistentItemID)
+		req := suite.makeRequest("GET", url, nil, false)
+		resp := suite.doRequest(req)
+
+		assert.Equal(suite.T(), http.StatusOK, resp.Code)
 		
-		var response map[string]interface{}
+		var response WatchingResponse
 		err := json.Unmarshal(resp.Body.Bytes(), &response)
-		require.NoError(suite.T(), err)
-		
-		assert.Equal(suite.T(), "Invalid item ID format", response["message"])
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), 0, response.PeopleWatching)
 	})
 
-	suite.Run("GET /list/watching/:item_id - should handle edge case UUIDs", func() {
-		edgeCases := []string{
-			"00000000-0000-0000-0000-000000000000", // All zeros
-			"ffffffff-ffff-ffff-ffff-ffffffffffff", // All F's
+	suite.Run("should return 400 for invalid item ID format", func() {
+		invalidItemIDs := []string{
+			"invalid-uuid",
+			"123",
+			"",
+			"not-a-uuid-at-all",
+		}
+
+		for _, invalidID := range invalidItemIDs {
+			url := fmt.Sprintf("/list/watching/%s", invalidID)
+			req := suite.makeRequest("GET", url, nil, false)
+			resp := suite.doRequest(req)
+
+			assert.Equal(suite.T(), http.StatusBadRequest, resp.Code, "Should return 400 for invalid ID: %s", invalidID)
+			
+			body := suite.parseResponseBody(resp)
+			assert.Contains(suite.T(), body["message"], "Invalid item ID format")
+		}
+	})
+}
+
+// ============================================================================
+// GetAllFromList Handler Tests (Authenticated Endpoints)
+// ============================================================================
+
+func (suite *HandlersTestSuite) TestGetAllFromList() {
+	suite.Run("should get all items from existing list", func() {
+		for _, listType := range handlerTestListTypes {
+			suite.Run(fmt.Sprintf("for %s list", listType), func() {
+				// Create test list with items
+				testItems := []string{
+					uuid.New().String(),
+					uuid.New().String(),
+					uuid.New().String(),
+				}
+				suite.createTestUserList(listType, testItems)
+
+				// Test the endpoint
+				url := fmt.Sprintf("/list/%s", listType)
+				req := suite.makeRequest("GET", url, nil, true)
+				resp := suite.doRequest(req)
+
+				assert.Equal(suite.T(), http.StatusOK, resp.Code)
+				
+				body := suite.parseResponseBody(resp)
+				assert.Contains(suite.T(), body, listType)
+				
+				returnedItems, ok := body[listType].([]interface{})
+				assert.True(suite.T(), ok)
+				assert.Equal(suite.T(), len(testItems), len(returnedItems))
+				
+				// Verify all items are returned
+				for _, expectedItem := range testItems {
+					found := false
+					for _, returnedItem := range returnedItems {
+						if returnedItem.(string) == expectedItem {
+							found = true
+							break
+						}
+					}
+					assert.True(suite.T(), found, "Item %s should be in response", expectedItem)
+				}
+			})
+		}
+	})
+
+	suite.Run("should return 404 for non-existent list", func() {
+		for _, listType := range handlerTestListTypes {
+			suite.Run(fmt.Sprintf("for %s list", listType), func() {
+				// Don't create any test data
+				
+				url := fmt.Sprintf("/list/%s", listType)
+				req := suite.makeRequest("GET", url, nil, true)
+				resp := suite.doRequest(req)
+
+				assert.Equal(suite.T(), http.StatusNotFound, resp.Code)
+				
+				body := suite.parseResponseBody(resp)
+				expectedMessage := fmt.Sprintf("Could not find any %s for current user", listType)
+				assert.Contains(suite.T(), body["message"], expectedMessage)
+			})
+		}
+	})
+
+	suite.Run("should require authentication", func() {
+		url := "/list/watchlist"
+		req := suite.makeRequest("GET", url, nil, false)
+		resp := suite.doRequest(req)
+
+		assert.Equal(suite.T(), http.StatusUnauthorized, resp.Code)
+		
+		body := suite.parseResponseBody(resp)
+		assert.Contains(suite.T(), body["message"], "Access token is required")
+	})
+
+	suite.Run("should reject invalid authentication", func() {
+		url := "/list/watchlist"
+		req := suite.makeRequest("GET", url, nil, true)
+		req.Header.Set("X-Access-Token", "invalid-token")
+		resp := suite.doRequest(req)
+
+		assert.Equal(suite.T(), http.StatusUnauthorized, resp.Code)
+		
+		body := suite.parseResponseBody(resp)
+		assert.Contains(suite.T(), body["message"], "Invalid or expired token")
+	})
+}
+
+// ============================================================================
+// AddToList Handler Tests (Authenticated Endpoints)
+// ============================================================================
+
+func (suite *HandlersTestSuite) TestAddToList() {
+	suite.Run("should add item to existing list", func() {
+		for _, listType := range handlerTestListTypes {
+			suite.Run(fmt.Sprintf("for %s list", listType), func() {
+				// Create existing list
+				existingItems := []string{uuid.New().String()}
+				suite.createTestUserList(listType, existingItems)
+
+				// Add new item
+				newItemUUID := uuid.New().String()
+				payload := UUIDRequest{UUID: newItemUUID}
+				
+				url := fmt.Sprintf("/list/%s", listType)
+				req := suite.makeRequest("POST", url, payload, true)
+				resp := suite.doRequest(req)
+
+				assert.Equal(suite.T(), http.StatusCreated, resp.Code)
+				body := suite.parseResponseBody(resp)
+				assert.Equal(suite.T(), "Created", body["message"])
+
+				// Verify item was added to database
+				updatedList, err := suite.getTestUserList(listType)
+				suite.Require().NoError(err)
+				assert.Contains(suite.T(), updatedList.ItemIds, newItemUUID)
+				assert.Equal(suite.T(), 2, len(updatedList.ItemIds))
+				// New item should be first (prepended)
+				assert.Equal(suite.T(), newItemUUID, updatedList.ItemIds[0])
+			})
+		}
+	})
+
+	suite.Run("should create new list for new user", func() {
+		for _, listType := range handlerTestListTypes {
+			suite.Run(fmt.Sprintf("for %s list", listType), func() {
+				// Add item to non-existent list
+				newItemUUID := uuid.New().String()
+				payload := UUIDRequest{UUID: newItemUUID}
+				
+				url := fmt.Sprintf("/list/%s", listType)
+				req := suite.makeRequest("POST", url, payload, true)
+				resp := suite.doRequest(req)
+
+				assert.Equal(suite.T(), http.StatusCreated, resp.Code)
+
+				// Verify new list was created
+				newList, err := suite.getTestUserList(listType)
+				suite.Require().NoError(err)
+				assert.Equal(suite.T(), []string{newItemUUID}, newList.ItemIds)
+				assert.Equal(suite.T(), handlersTestPublicID, newList.ID)
+			})
+		}
+	})
+
+	suite.Run("should not add duplicate items", func() {
+		// Create list with existing item
+		existingUUID := uuid.New().String()
+		suite.createTestUserList("watchlist", []string{existingUUID})
+
+		// Try to add the same item again
+		payload := UUIDRequest{UUID: existingUUID}
+		req := suite.makeRequest("POST", "/list/watchlist", payload, true)
+		resp := suite.doRequest(req)
+
+		assert.Equal(suite.T(), http.StatusCreated, resp.Code)
+
+		// Verify no duplicate was added
+		updatedList, err := suite.getTestUserList("watchlist")
+		suite.Require().NoError(err)
+		assert.Equal(suite.T(), 1, len(updatedList.ItemIds))
+		assert.Equal(suite.T(), existingUUID, updatedList.ItemIds[0])
+	})
+
+	suite.Run("should enforce 50 item limit", func() {
+		// Create list with 50 items
+		items := make([]string, 50)
+		for i := 0; i < 50; i++ {
+			items[i] = uuid.New().String()
+		}
+		suite.createTestUserList("watchlist", items)
+
+		// Try to add one more item
+		newItem := uuid.New().String()
+		payload := UUIDRequest{UUID: newItem}
+		req := suite.makeRequest("POST", "/list/watchlist", payload, true)
+		resp := suite.doRequest(req)
+
+		assert.Equal(suite.T(), http.StatusCreated, resp.Code)
+
+		// Verify list still has 50 items (oldest should be removed)
+		updatedList, err := suite.getTestUserList("watchlist")
+		suite.Require().NoError(err)
+		assert.Equal(suite.T(), 50, len(updatedList.ItemIds))
+		assert.Equal(suite.T(), newItem, updatedList.ItemIds[0]) // New item should be first
+	})
+
+	suite.Run("should return 400 for invalid JSON", func() {
+		req := httptest.NewRequest("POST", "/list/watchlist", strings.NewReader("invalid json"))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Access-Token", handlersTestAccessToken)
+		resp := suite.doRequest(req)
+
+		assert.Equal(suite.T(), http.StatusBadRequest, resp.Code)
+		body := suite.parseResponseBody(resp)
+		assert.Contains(suite.T(), body["message"], "Check ya inputs mate")
+	})
+
+	suite.Run("should return 400 for missing UUID", func() {
+		payload := map[string]string{}
+		req := suite.makeRequest("POST", "/list/watchlist", payload, true)
+		resp := suite.doRequest(req)
+
+		assert.Equal(suite.T(), http.StatusBadRequest, resp.Code)
+		body := suite.parseResponseBody(resp)
+		assert.Contains(suite.T(), body["message"], "Check ya inputs mate")
+	})
+
+	suite.Run("should return 400 for invalid UUID format", func() {
+		invalidUUIDs := []string{
+			"invalid-uuid",
+			"123",
+			"",
+			"not-a-uuid-at-all",
+			"123e4567-e89b-12d3-a456-ZZZZZZZZZZZZ", // Invalid hex characters
+		}
+
+		for _, invalidUUID := range invalidUUIDs {
+			payload := UUIDRequest{UUID: invalidUUID}
+			req := suite.makeRequest("POST", "/list/watchlist", payload, true)
+			resp := suite.doRequest(req)
+
+			assert.Equal(suite.T(), http.StatusBadRequest, resp.Code, "Should return 400 for invalid UUID: %s", invalidUUID)
+			body := suite.parseResponseBody(resp)
+			assert.Contains(suite.T(), body["message"], "Invalid UUID format")
+		}
+	})
+
+	suite.Run("should require authentication", func() {
+		payload := UUIDRequest{UUID: uuid.New().String()}
+		req := suite.makeRequest("POST", "/list/watchlist", payload, false)
+		resp := suite.doRequest(req)
+
+		assert.Equal(suite.T(), http.StatusUnauthorized, resp.Code)
+	})
+}
+
+// ============================================================================
+// RemoveItemFromList Handler Tests (Authenticated Endpoints)
+// ============================================================================
+
+func (suite *HandlersTestSuite) TestRemoveItemFromList() {
+	suite.Run("should remove existing item from list", func() {
+		for _, listType := range handlerTestListTypes {
+			suite.Run(fmt.Sprintf("for %s list", listType), func() {
+				// Create list with items
+				itemToRemove := uuid.New().String()
+				itemToKeep := uuid.New().String()
+				suite.createTestUserList(listType, []string{itemToRemove, itemToKeep})
+
+				// Remove one item
+				url := fmt.Sprintf("/list/%s/%s", listType, itemToRemove)
+				req := suite.makeRequest("DELETE", url, nil, true)
+				resp := suite.doRequest(req)
+
+				assert.Equal(suite.T(), http.StatusNoContent, resp.Code)
+
+				// Verify item was removed
+				updatedList, err := suite.getTestUserList(listType)
+				suite.Require().NoError(err)
+				assert.NotContains(suite.T(), updatedList.ItemIds, itemToRemove)
+				assert.Contains(suite.T(), updatedList.ItemIds, itemToKeep)
+				assert.Equal(suite.T(), 1, len(updatedList.ItemIds))
+			})
+		}
+	})
+
+	suite.Run("should delete document when removing last item", func() {
+		// Create list with single item
+		itemToRemove := uuid.New().String()
+		suite.createTestUserList("watchlist", []string{itemToRemove})
+
+		// Remove the only item
+		url := fmt.Sprintf("/list/watchlist/%s", itemToRemove)
+		req := suite.makeRequest("DELETE", url, nil, true)
+		resp := suite.doRequest(req)
+
+		assert.Equal(suite.T(), http.StatusNoContent, resp.Code)
+
+		// Verify document was deleted
+		_, err := suite.getTestUserList("watchlist")
+		assert.Error(suite.T(), err)
+		assert.Equal(suite.T(), mongo.ErrNoDocuments, err)
+	})
+
+	suite.Run("should return 204 even when item doesn't exist in list", func() {
+		// Create list without the item we'll try to remove
+		existingItem := uuid.New().String()
+		nonExistentItem := uuid.New().String()
+		suite.createTestUserList("watchlist", []string{existingItem})
+
+		// Try to remove non-existent item
+		url := fmt.Sprintf("/list/watchlist/%s", nonExistentItem)
+		req := suite.makeRequest("DELETE", url, nil, true)
+		resp := suite.doRequest(req)
+
+		assert.Equal(suite.T(), http.StatusNoContent, resp.Code)
+
+		// Verify original item is still there
+		list, err := suite.getTestUserList("watchlist")
+		suite.Require().NoError(err)
+		assert.Contains(suite.T(), list.ItemIds, existingItem)
+	})
+
+	suite.Run("should return 204 even when user has no list", func() {
+		// Try to remove item from non-existent list
+		itemToRemove := uuid.New().String()
+		url := fmt.Sprintf("/list/watchlist/%s", itemToRemove)
+		req := suite.makeRequest("DELETE", url, nil, true)
+		resp := suite.doRequest(req)
+
+		assert.Equal(suite.T(), http.StatusNoContent, resp.Code)
+	})
+
+	suite.Run("should return 400 for invalid item ID", func() {
+		invalidItemIDs := []string{
+			"invalid-uuid",
+			"123",
+			"not-a-uuid-at-all",
+		}
+
+		for _, invalidID := range invalidItemIDs {
+			url := fmt.Sprintf("/list/watchlist/%s", invalidID)
+			req := suite.makeRequest("DELETE", url, nil, true)
+			resp := suite.doRequest(req)
+
+			assert.Equal(suite.T(), http.StatusBadRequest, resp.Code, "Should return 400 for invalid ID: %s", invalidID)
+			body := suite.parseResponseBody(resp)
+			assert.Contains(suite.T(), body["message"], "Bad request")
+		}
+	})
+
+	suite.Run("should require authentication", func() {
+		itemToRemove := uuid.New().String()
+		url := fmt.Sprintf("/list/watchlist/%s", itemToRemove)
+		req := suite.makeRequest("DELETE", url, nil, false)
+		resp := suite.doRequest(req)
+
+		assert.Equal(suite.T(), http.StatusUnauthorized, resp.Code)
+	})
+}
+
+// ============================================================================
+// RemoveAllFromList Handler Tests (Authenticated Endpoints)
+// ============================================================================
+
+func (suite *HandlersTestSuite) TestRemoveAllFromList() {
+	suite.Run("should remove all items from existing list", func() {
+		for _, listType := range handlerTestListTypes {
+			suite.Run(fmt.Sprintf("for %s list", listType), func() {
+				// Create test list with multiple items
+				testItems := []string{
+					uuid.New().String(),
+					uuid.New().String(),
+					uuid.New().String(),
+				}
+				suite.createTestUserList(listType, testItems)
+
+				// Remove all items
+				url := fmt.Sprintf("/list/%s", listType)
+				req := suite.makeRequest("DELETE", url, nil, true)
+				resp := suite.doRequest(req)
+
+				assert.Equal(suite.T(), http.StatusGone, resp.Code)
+
+				// Verify document was deleted
+				_, err := suite.getTestUserList(listType)
+				assert.Error(suite.T(), err)
+				assert.Equal(suite.T(), mongo.ErrNoDocuments, err)
+			})
+		}
+	})
+
+	suite.Run("should return 410 even when user has no list", func() {
+		// Try to remove all items from non-existent list
+		url := "/list/watchlist"
+		req := suite.makeRequest("DELETE", url, nil, true)
+		resp := suite.doRequest(req)
+
+		assert.Equal(suite.T(), http.StatusGone, resp.Code)
+	})
+
+	suite.Run("should require authentication", func() {
+		url := "/list/watchlist"
+		req := suite.makeRequest("DELETE", url, nil, false)
+		resp := suite.doRequest(req)
+
+		assert.Equal(suite.T(), http.StatusUnauthorized, resp.Code)
+	})
+}
+
+// ============================================================================
+// Public Status Endpoint Tests
+// ============================================================================
+
+func (suite *HandlersTestSuite) TestStatusEndpoint() {
+	suite.Run("should return status without authentication", func() {
+		req := suite.makeRequest("GET", "/list/status", nil, false)
+		resp := suite.doRequest(req)
+
+		assert.Equal(suite.T(), http.StatusOK, resp.Code)
+		
+		body := suite.parseResponseBody(resp)
+		assert.Contains(suite.T(), body["message"], "System running")
+		// Version may or may not be set in test environment
+		if version, exists := body["version"]; exists {
+			assert.IsType(suite.T(), "", version)
+		}
+	})
+}
+
+// ============================================================================
+// Integration Test Scenarios
+// ============================================================================
+
+func (suite *HandlersTestSuite) TestIntegrationScenarios() {
+	suite.Run("should handle complete user journey", func() {
+		testItemUUID := uuid.New().String()
+		
+		// 1. User adds item to watchlist
+		payload := UUIDRequest{UUID: testItemUUID}
+		req := suite.makeRequest("POST", "/list/watchlist", payload, true)
+		resp := suite.doRequest(req)
+		assert.Equal(suite.T(), http.StatusCreated, resp.Code)
+		
+		// 2. User retrieves watchlist
+		req = suite.makeRequest("GET", "/list/watchlist", nil, true)
+		resp = suite.doRequest(req)
+		assert.Equal(suite.T(), http.StatusOK, resp.Code)
+		body := suite.parseResponseBody(resp)
+		watchlist := body["watchlist"].([]interface{})
+		assert.Contains(suite.T(), watchlist, testItemUUID)
+		
+		// 3. Check watching count (public endpoint)
+		req = suite.makeRequest("GET", fmt.Sprintf("/list/watching/%s", testItemUUID), nil, false)
+		resp = suite.doRequest(req)
+		assert.Equal(suite.T(), http.StatusOK, resp.Code)
+		var watchingResp WatchingResponse
+		json.Unmarshal(resp.Body.Bytes(), &watchingResp)
+		assert.Equal(suite.T(), 1, watchingResp.PeopleWatching)
+		
+		// 4. User removes specific item
+		req = suite.makeRequest("DELETE", fmt.Sprintf("/list/watchlist/%s", testItemUUID), nil, true)
+		resp = suite.doRequest(req)
+		assert.Equal(suite.T(), http.StatusNoContent, resp.Code)
+		
+		// 5. Verify item is gone
+		req = suite.makeRequest("GET", "/list/watchlist", nil, true)
+		resp = suite.doRequest(req)
+		assert.Equal(suite.T(), http.StatusNotFound, resp.Code)
+		
+		// 6. Check watching count is now zero
+		req = suite.makeRequest("GET", fmt.Sprintf("/list/watching/%s", testItemUUID), nil, false)
+		resp = suite.doRequest(req)
+		assert.Equal(suite.T(), http.StatusOK, resp.Code)
+		json.Unmarshal(resp.Body.Bytes(), &watchingResp)
+		assert.Equal(suite.T(), 0, watchingResp.PeopleWatching)
+	})
+
+	suite.Run("should handle multiple list types independently", func() {
+		testItemUUID := uuid.New().String()
+		
+		// Add same item to multiple lists
+		for _, listType := range handlerTestListTypes {
+			payload := UUIDRequest{UUID: testItemUUID}
+			url := fmt.Sprintf("/list/%s", listType)
+			req := suite.makeRequest("POST", url, payload, true)
+			resp := suite.doRequest(req)
+			assert.Equal(suite.T(), http.StatusCreated, resp.Code)
 		}
 		
-		for _, testUUID := range edgeCases {
-			resp := suite.makeUnauthenticatedRequest("GET", "/list/watching/"+testUUID, nil)
+		// Verify item exists in all lists
+		for _, listType := range handlerTestListTypes {
+			url := fmt.Sprintf("/list/%s", listType)
+			req := suite.makeRequest("GET", url, nil, true)
+			resp := suite.doRequest(req)
+			assert.Equal(suite.T(), http.StatusOK, resp.Code)
+			
+			body := suite.parseResponseBody(resp)
+			listItems := body[listType].([]interface{})
+			assert.Contains(suite.T(), listItems, testItemUUID)
+		}
+		
+		// Remove from one list
+		req := suite.makeRequest("DELETE", fmt.Sprintf("/list/watchlist/%s", testItemUUID), nil, true)
+		resp := suite.doRequest(req)
+		assert.Equal(suite.T(), http.StatusNoContent, resp.Code)
+		
+		// Verify it's only gone from watchlist
+		req = suite.makeRequest("GET", "/list/watchlist", nil, true)
+		resp = suite.doRequest(req)
+		assert.Equal(suite.T(), http.StatusNotFound, resp.Code)
+		
+		// But still exists in others
+		for _, listType := range []string{"favourites", "viewed", "bids", "purchased"} {
+			url := fmt.Sprintf("/list/%s", listType)
+			req := suite.makeRequest("GET", url, nil, true)
+			resp := suite.doRequest(req)
 			assert.Equal(suite.T(), http.StatusOK, resp.Code)
 		}
 	})
 }
 
-// Test Authentication Middleware
+// ============================================================================
+// Run the Test Suite
+// ============================================================================
 
-func (suite *HandlersTestSuite) TestAuthenticationMiddleware() {
-	suite.Run("should reject requests without auth token", func() {
-		resp := suite.makeUnauthenticatedRequest("GET", "/list/watchlist", nil)
-		
-		assert.Equal(suite.T(), http.StatusUnauthorized, resp.Code)
-		
-		var response map[string]interface{}
-		err := json.Unmarshal(resp.Body.Bytes(), &response)
-		require.NoError(suite.T(), err)
-		
-		assert.Contains(suite.T(), response["message"], "Authentication required")
-	})
-
-	suite.Run("should reject requests with invalid auth token", func() {
-		// Setup auth mock to fail
-		suite.setupAuthMock(suite.testPublicID, false)
-		
-		req := httptest.NewRequest("GET", "/list/watchlist", nil)
-		req.Header.Set("X-Access-Token", "invalid-token")
-		
-		resp := httptest.NewRecorder()
-		suite.router.ServeHTTP(resp, req)
-		
-		assert.Equal(suite.T(), http.StatusUnauthorized, resp.Code)
-	})
-
-	suite.Run("should accept valid auth token", func() {
-		// Reset and setup a specific mock for this test
-		httpmock.Reset()
-		suite.setupAuthMock(suite.testPublicID, true)
-		
-		resp := suite.makeAuthenticatedRequest("GET", "/list/watchlist", nil)
-		
-		// Should get to the handler (which returns 404 in our mock)
-		assert.Equal(suite.T(), http.StatusNotFound, resp.Code)
-	})
-
-	suite.Run("should handle auth service unavailable", func() {
-		// Clear all mocks to simulate service unavailable
-		httpmock.Reset()
-		
-		req := httptest.NewRequest("GET", "/list/watchlist", nil)
-		req.Header.Set("X-Access-Token", "any-token")
-		
-		resp := httptest.NewRecorder()
-		suite.router.ServeHTTP(resp, req)
-		
-		assert.Equal(suite.T(), http.StatusUnauthorized, resp.Code)
-		
-		var response map[string]interface{}
-		err := json.Unmarshal(resp.Body.Bytes(), &response)
-		require.NoError(suite.T(), err)
-		
-		assert.Contains(suite.T(), response["message"], "Authentication service unavailable")
-	})
-}
-
-// Test GET Endpoints for All List Types
-
-func (suite *HandlersTestSuite) TestGetEndpoints() {
-	for _, listType := range handlerTestListTypes {
-		suite.Run(fmt.Sprintf("GET /list/%s - should handle empty list", listType), func() {
-			resp := suite.makeAuthenticatedRequest("GET", "/list/"+listType, nil)
-			
-			assert.Equal(suite.T(), http.StatusNotFound, resp.Code)
-			
-			var response map[string]interface{}
-			err := json.Unmarshal(resp.Body.Bytes(), &response)
-			require.NoError(suite.T(), err)
-			
-			expectedMessage := "Could not find any " + listType + " for current user"
-			assert.Equal(suite.T(), expectedMessage, response["message"])
-		})
-
-		suite.Run(fmt.Sprintf("GET /list/%s - should require authentication", listType), func() {
-			resp := suite.makeUnauthenticatedRequest("GET", "/list/"+listType, nil)
-			assert.Equal(suite.T(), http.StatusUnauthorized, resp.Code)
-		})
-	}
-}
-
-// Test POST Endpoints for All List Types
-
-func (suite *HandlersTestSuite) TestPostEndpoints() {
-	for _, listType := range handlerTestListTypes {
-		suite.Run(fmt.Sprintf("POST /list/%s - should accept valid UUID", listType), func() {
-			testItemID := uuid.New().String()
-			request := UUIDRequest{UUID: testItemID}
-			
-			resp := suite.makeAuthenticatedRequest("POST", "/list/"+listType, request)
-			
-			assert.Equal(suite.T(), http.StatusCreated, resp.Code)
-			
-			var response map[string]interface{}
-			err := json.Unmarshal(resp.Body.Bytes(), &response)
-			require.NoError(suite.T(), err)
-			
-			assert.Equal(suite.T(), "Created", response["message"])
-		})
-
-		suite.Run(fmt.Sprintf("POST /list/%s - should reject invalid UUID", listType), func() {
-			request := UUIDRequest{UUID: "invalid-uuid"}
-			
-			resp := suite.makeAuthenticatedRequest("POST", "/list/"+listType, request)
-			
-			assert.Equal(suite.T(), http.StatusBadRequest, resp.Code)
-			
-			var response map[string]interface{}
-			err := json.Unmarshal(resp.Body.Bytes(), &response)
-			require.NoError(suite.T(), err)
-			
-			assert.Equal(suite.T(), "Invalid UUID format", response["message"])
-		})
-
-		suite.Run(fmt.Sprintf("POST /list/%s - should reject malformed JSON", listType), func() {
-			req := httptest.NewRequest("POST", "/list/"+listType, bytes.NewBufferString(`{"invalid": json}`))
-			req.Header.Set("Content-Type", "application/json")
-			req.Header.Set("X-Access-Token", handlerTestToken)
-			
-			resp := httptest.NewRecorder()
-			suite.router.ServeHTTP(resp, req)
-			
-			assert.Equal(suite.T(), http.StatusBadRequest, resp.Code)
-			
-			var response map[string]interface{}
-			err := json.Unmarshal(resp.Body.Bytes(), &response)
-			require.NoError(suite.T(), err)
-			
-			assert.Equal(suite.T(), "Check ya inputs mate. Yer not valid, Jason", response["message"])
-		})
-
-		suite.Run(fmt.Sprintf("POST /list/%s - should require authentication", listType), func() {
-			request := UUIDRequest{UUID: uuid.New().String()}
-			resp := suite.makeUnauthenticatedRequest("POST", "/list/"+listType, request)
-			assert.Equal(suite.T(), http.StatusUnauthorized, resp.Code)
-		})
-
-		suite.Run(fmt.Sprintf("POST /list/%s - should reject missing UUID field", listType), func() {
-			request := map[string]string{"wrong_field": "value"}
-			
-			resp := suite.makeAuthenticatedRequest("POST", "/list/"+listType, request)
-			
-			assert.Equal(suite.T(), http.StatusBadRequest, resp.Code)
-		})
-
-		suite.Run(fmt.Sprintf("POST /list/%s - should handle edge case UUIDs", listType), func() {
-			edgeCases := []string{
-				"00000000-0000-0000-0000-000000000000", // All zeros
-				"ffffffff-ffff-ffff-ffff-ffffffffffff", // All F's
-			}
-			
-			for _, testUUID := range edgeCases {
-				request := UUIDRequest{UUID: testUUID}
-				resp := suite.makeAuthenticatedRequest("POST", "/list/"+listType, request)
-				assert.Equal(suite.T(), http.StatusCreated, resp.Code)
-			}
-		})
-	}
-}
-
-// Test DELETE Item Endpoints for All List Types
-
-func (suite *HandlersTestSuite) TestDeleteItemEndpoints() {
-	for _, listType := range handlerTestListTypes {
-		suite.Run(fmt.Sprintf("DELETE /list/%s/:itemId - should accept valid UUID", listType), func() {
-			testItemID := uuid.New().String()
-			
-			resp := suite.makeAuthenticatedRequest("DELETE", "/list/"+listType+"/"+testItemID, nil)
-			
-			assert.Equal(suite.T(), http.StatusNoContent, resp.Code)
-		})
-
-		suite.Run(fmt.Sprintf("DELETE /list/%s/:itemId - should reject invalid UUID", listType), func() {
-			resp := suite.makeAuthenticatedRequest("DELETE", "/list/"+listType+"/invalid-uuid", nil)
-			
-			assert.Equal(suite.T(), http.StatusBadRequest, resp.Code)
-			
-			var response map[string]interface{}
-			err := json.Unmarshal(resp.Body.Bytes(), &response)
-			require.NoError(suite.T(), err)
-			
-			assert.Equal(suite.T(), "Bad request", response["message"])
-		})
-
-		suite.Run(fmt.Sprintf("DELETE /list/%s/:itemId - should require authentication", listType), func() {
-			testItemID := uuid.New().String()
-			resp := suite.makeUnauthenticatedRequest("DELETE", "/list/"+listType+"/"+testItemID, nil)
-			assert.Equal(suite.T(), http.StatusUnauthorized, resp.Code)
-		})
-
-		suite.Run(fmt.Sprintf("DELETE /list/%s/:itemId - should handle edge case UUIDs", listType), func() {
-			edgeCases := []string{
-				"00000000-0000-0000-0000-000000000000", // All zeros
-				"ffffffff-ffff-ffff-ffff-ffffffffffff", // All F's
-			}
-			
-			for _, testUUID := range edgeCases {
-				resp := suite.makeAuthenticatedRequest("DELETE", "/list/"+listType+"/"+testUUID, nil)
-				assert.Equal(suite.T(), http.StatusNoContent, resp.Code)
-			}
-		})
-	}
-}
-
-// Test DELETE All Endpoints for All List Types
-
-func (suite *HandlersTestSuite) TestDeleteAllEndpoints() {
-	for _, listType := range handlerTestListTypes {
-		suite.Run(fmt.Sprintf("DELETE /list/%s - should remove all items", listType), func() {
-			resp := suite.makeAuthenticatedRequest("DELETE", "/list/"+listType, nil)
-			
-			assert.Equal(suite.T(), http.StatusGone, resp.Code)
-		})
-
-		suite.Run(fmt.Sprintf("DELETE /list/%s - should require authentication", listType), func() {
-			resp := suite.makeUnauthenticatedRequest("DELETE", "/list/"+listType, nil)
-			assert.Equal(suite.T(), http.StatusUnauthorized, resp.Code)
-		})
-	}
-}
-
-// Test Middleware Edge Cases
-
-func (suite *HandlersTestSuite) TestMiddlewareEdgeCases() {
-	suite.Run("should handle malformed content-type", func() {
-		req := httptest.NewRequest("POST", "/list/watchlist", bytes.NewBufferString(`{"uuid": "valid-uuid"}`))
-		req.Header.Set("Content-Type", "text/plain")
-		req.Header.Set("X-Access-Token", handlerTestToken)
-		
-		resp := httptest.NewRecorder()
-		suite.router.ServeHTTP(resp, req)
-		
-		assert.Equal(suite.T(), http.StatusBadRequest, resp.Code)
-		
-		var response map[string]interface{}
-		err := json.Unmarshal(resp.Body.Bytes(), &response)
-		require.NoError(suite.T(), err)
-		
-		assert.Equal(suite.T(), "Content-Type must be application/json", response["message"])
-	})
-
-	suite.Run("should handle CORS preflight requests", func() {
-		req := httptest.NewRequest("OPTIONS", "/list/watchlist", nil)
-		
-		resp := httptest.NewRecorder()
-		suite.router.ServeHTTP(resp, req)
-		
-		assert.Equal(suite.T(), http.StatusOK, resp.Code)
-		assert.Equal(suite.T(), "*", resp.Header().Get("Access-Control-Allow-Origin"))
-		assert.Contains(suite.T(), resp.Header().Get("Access-Control-Allow-Methods"), "GET")
-		assert.Contains(suite.T(), resp.Header().Get("Access-Control-Allow-Methods"), "POST")
-		assert.Contains(suite.T(), resp.Header().Get("Access-Control-Allow-Methods"), "DELETE")
-	})
-}
-
-// Test 404 Handling
-
-func (suite *HandlersTestSuite) TestNotFoundHandling() {
-	suite.Run("should return 404 for non-existent routes", func() {
-		resp := suite.makeUnauthenticatedRequest("GET", "/list/non-existent", nil)
-		
-		assert.Equal(suite.T(), http.StatusNotFound, resp.Code)
-		
-		var response map[string]interface{}
-		err := json.Unmarshal(resp.Body.Bytes(), &response)
-		require.NoError(suite.T(), err)
-		
-		assert.Equal(suite.T(), "Resource not found", response["message"])
-	})
-
-	suite.Run("should return 404 for invalid paths", func() {
-		invalidPaths := []string{
-			"/list/invalid-list-type",
-			"/list/watchlist/extra/path",
-			"/wrong/path",
-		}
-		
-		for _, path := range invalidPaths {
-			resp := suite.makeUnauthenticatedRequest("GET", path, nil)
-			assert.Equal(suite.T(), http.StatusNotFound, resp.Code)
-		}
-	})
-}
-
-// Test Complex Authentication Scenarios
-
-func (suite *HandlersTestSuite) TestComplexAuthScenarios() {
-	suite.Run("should handle auth service returning invalid JSON", func() {
-		httpmock.Reset()
-		httpmock.RegisterResponder("GET", suite.testAuthURL,
-			httpmock.NewStringResponder(200, `invalid json`))
-		
-		req := httptest.NewRequest("GET", "/list/watchlist", nil)
-		req.Header.Set("X-Access-Token", "any-token")
-		
-		resp := httptest.NewRecorder()
-		suite.router.ServeHTTP(resp, req)
-		
-		assert.Equal(suite.T(), http.StatusInternalServerError, resp.Code)
-	})
-
-	suite.Run("should handle auth service returning empty public_id", func() {
-		httpmock.Reset()
-		responder, _ := httpmock.NewJsonResponder(200, map[string]string{"public_id": ""})
-		httpmock.RegisterResponder("GET", suite.testAuthURL, responder)
-		
-		req := httptest.NewRequest("GET", "/list/watchlist", nil)
-		req.Header.Set("X-Access-Token", "any-token")
-		
-		resp := httptest.NewRecorder()
-		suite.router.ServeHTTP(resp, req)
-		
-		assert.Equal(suite.T(), http.StatusInternalServerError, resp.Code)
-	})
-
-	suite.Run("should handle auth service returning invalid UUID in public_id", func() {
-		httpmock.Reset()
-		responder, _ := httpmock.NewJsonResponder(200, map[string]string{"public_id": "invalid-uuid"})
-		httpmock.RegisterResponder("GET", suite.testAuthURL, responder)
-		
-		req := httptest.NewRequest("GET", "/list/watchlist", nil)
-		req.Header.Set("X-Access-Token", "any-token")
-		
-		resp := httptest.NewRecorder()
-		suite.router.ServeHTTP(resp, req)
-		
-		assert.Equal(suite.T(), http.StatusInternalServerError, resp.Code)
-	})
-
-	suite.Run("should handle missing AUTHYURL environment variable", func() {
-		// Temporarily unset AUTHYURL
-		originalURL := os.Getenv("AUTHYURL")
-		os.Unsetenv("AUTHYURL")
-		
-		req := httptest.NewRequest("GET", "/list/watchlist", nil)
-		req.Header.Set("X-Access-Token", "any-token")
-		
-		resp := httptest.NewRecorder()
-		suite.router.ServeHTTP(resp, req)
-		
-		assert.Equal(suite.T(), http.StatusInternalServerError, resp.Code)
-		
-		// Restore original value
-		os.Setenv("AUTHYURL", originalURL)
-	})
-}
-
-// Test UUID Validation Edge Cases
-
-func (suite *HandlersTestSuite) TestUUIDValidationEdgeCases() {
-	// These are the UUIDs that should definitely be rejected
-	invalidUUIDs := []string{
-		"",                                        // Empty string
-		"not-a-uuid",                             // Not a UUID
-		"123",                                     // Too short
-		"123e4567-e89b-12d3-a456-42661417400",   // Too short
-		"123e4567-e89b-12d3-a456-426614174000x", // Too long
-		"123e4567-e89b-12d3-a456-42661417400g",  // Invalid hex character
-		"123e4567-e89b-12d3-a456",               // Incomplete
-	}
-
-	for _, listType := range handlerTestListTypes {
-		for _, invalidUUID := range invalidUUIDs {
-			suite.Run(fmt.Sprintf("POST /list/%s - should reject UUID: %s", listType, invalidUUID), func() {
-				request := UUIDRequest{UUID: invalidUUID}
-				resp := suite.makeAuthenticatedRequest("POST", "/list/"+listType, request)
-				assert.Equal(suite.T(), http.StatusBadRequest, resp.Code)
-			})
-
-			// Skip empty string test for DELETE endpoint since it would be handled by routing
-			if invalidUUID != "" {
-				suite.Run(fmt.Sprintf("DELETE /list/%s/:itemId - should reject UUID: %s", listType, invalidUUID), func() {
-					resp := suite.makeAuthenticatedRequest("DELETE", "/list/"+listType+"/"+invalidUUID, nil)
-					assert.Equal(suite.T(), http.StatusBadRequest, resp.Code)
-				})
-			}
-		}
-	}
-
-	suite.Run("GET /list/watching/:item_id - should reject clearly invalid UUIDs", func() {
-		clearlyInvalidUUIDs := []string{
-			"not-a-uuid",
-			"123",
-			"123e4567-e89b-12d3-a456-42661417400g", // Invalid hex character
-		}
-		
-		for _, invalidUUID := range clearlyInvalidUUIDs {
-			resp := suite.makeUnauthenticatedRequest("GET", "/list/watching/"+invalidUUID, nil)
-			assert.Equal(suite.T(), http.StatusBadRequest, resp.Code)
-		}
-	})
+func TestHandlersTestSuite(t *testing.T) {
+	suite.Run(t, new(HandlersTestSuite))
 }
