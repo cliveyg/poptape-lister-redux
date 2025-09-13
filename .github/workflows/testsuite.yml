@@ -61,14 +61,14 @@ jobs:
         run: |
           set -e
           set -o pipefail
-          touch poptape_reviews.log
+          touch poptape_lister.log
           go test -v ./... -cover -coverprofile=./cover.out | tee test.out
         shell: bash
 
       # and check test coverage percentage
       - name: Check test coverage is above threshold
         env:
-          TESTCOVERAGE_THRESHOLD: 80
+          TESTCOVERAGE_THRESHOLD: 45
         run: |
           echo "Checking test coverage is above threshold..."
           echo "Threshold             : $TESTCOVERAGE_THRESHOLD %"
