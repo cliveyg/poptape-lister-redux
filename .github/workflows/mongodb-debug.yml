@@ -1,4 +1,8 @@
 name: MongoDB Service Debug
+permissions:
+  contents: none
+  issues: none
+  pull-requests: none
 
 on:
   workflow_dispatch:
