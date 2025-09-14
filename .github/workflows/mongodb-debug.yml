@@ -24,6 +24,9 @@ jobs:
       - name: Print /etc/hosts
         run: cat /etc/hosts
 
+      - name: Try ping localhost
+        run: ping -c 1 localhost
+        
       - name: Try ping mongodb
         run: |
           for i in {1..10}; do
@@ -33,6 +36,3 @@ jobs:
           done
           echo "Failed to resolve/ping mongodb"
           exit 1
-
-      - name: Try ping localhost
-        run: ping -c 1 localhost
