@@ -41,6 +41,15 @@ jobs:
           echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
           sudo apt-get update && sudo apt-get install -y mongodb-mongosh  
 
+      - name: Wait for MongoDB to be ready
+        run: |
+          for i in {1..30}; do
+            nc -z mongodb 27017 && echo Success && exit 0
+            echo "Waiting for MongoDB..."
+            sleep 2
+          done
+          echo "MongoDB never came up" && exit 1
+
       - uses: actions/checkout@v4
 
       - name: Set up Go
