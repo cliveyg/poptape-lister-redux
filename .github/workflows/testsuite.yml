@@ -12,7 +12,7 @@ on:
 jobs:
   all-tests:
     name: Run testsuite
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     services:
       mongodb:
         image: mongo:7
@@ -30,14 +30,101 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - name: Debug: List /etc/hosts
-        run: cat /etc/hosts
-      - name: Debug: Try to ping MongoDB
+
+      - name: Install mongosh
         run: |
-          for i in {1..10}; do
-            ping -c 1 mongodb && echo "PING SUCCESS" && exit 0
-            echo "Waiting for MongoDB DNS..."
+          sudo apt-get update
+          wget -qO- https://www.mongodb.org/static/pgp/server-7.0.asc | sudo tee /etc/apt/trusted.gpg.d/server-7.0.asc
+          echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
+          sudo apt-get update && sudo apt-get install -y mongodb-mongosh  
+
+      - name: Wait for MongoDB to be ready
+        run: |
+          for i in {1..30}; do
+            nc -zv mongodb 27017 && echo Success && exit 0
+            echo "Waiting for MongoDB..."
             sleep 2
           done
-          echo "Failed to resolve/ping mongodb"
-          exit 1
+          echo "MongoDB never came up" && exit 1
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Install dependencies
+        run: go mod tidy
+
+      - name: Create .env file from github secrets
+        run: |
+          echo "${{ secrets.ENV_FILE }}" > .env
+
+      - name: Override MONGO_URI for CI
+        run: |
+          echo "MONGO_URI=mongodb://lister_test:${{ secrets.TESTDB_PASSWORD }}@mongodb:27017/lister_test?authSource=admin" >> .env
+
+      - name: Run go test and generate test coverage file
+        run: |
+          set -e
+          set -o pipefail
+          touch poptape_lister.log
+          go test -v ./... -cover -coverprofile=./cover.out | tee test.out
+        shell: bash
+
+      - name: Check test coverage is above threshold
+        env:
+          TESTCOVERAGE_THRESHOLD: 0
+        run: |
+          echo "Checking test coverage is above threshold..."
+          echo "Threshold             : $TESTCOVERAGE_THRESHOLD %"
+          totalCoverage=`go tool cover -func=cover.out | grep total | grep -Eo '[0-9]+\.[0-9]+'`
+          echo "Current test coverage : $totalCoverage %"
+          echo "-----------------------------------------------------------"
+          if awk "BEGIN {exit !($totalCoverage >= $TESTCOVERAGE_THRESHOLD)}";
+          then
+              echo "Coverage passed threshold OK"
+          else
+              echo "Current test coverage is below threshold. Please add more unit tests or adjust threshold to a lower value."
+              echo "Failed"
+              exit 1
+          fi
+          echo "-----------------------------------------------------------"
+      - name: List missed coverage lines
+        shell: bash
+        run: |
+          go test -coverprofile=coverage.out ./...
+          echo "Missed lines:"
+          awk '
+            BEGIN { OFS=" " }
+            /^mode:/ { next }
+            {
+              for (i = 1; i <= NF; i += 4) {
+                block = $i
+                stmts = $(i+1)
+                count = $(i+2)
+                if (count == "0") {
+                  split(block, parts, ":")
+                  file = parts[1]
+                  rest = parts[2]
+                  split(rest, lines, ",")
+                  start = lines[1]
+                  end = lines[2]
+                  split(start, start_parts, ".")
+                  split(end, end_parts, ".")
+                  start_line = start_parts[1]
+                  end_line = end_parts[1]
+                  if (start_line == end_line) {
+                    print file ":" start_line
+                  } else {
+                    print file ":" start_line "-" end_line
+                  }
+                }
+              }
+            }
+          ' coverage.out
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.out
