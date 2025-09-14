@@ -55,7 +55,7 @@ jobs:
       - name: Create .env file from github secrets
         run: |
           echo "${{ secrets.ENV_FILE }}" > .env
-          
+
       - name: Override MONGO_URI for CI
         run: |
           echo "MONGO_URI=mongodb://lister_test:${{ secrets.TESTDB_PASSWORD }}@mongodb:27017/lister_test?authSource=admin" >> .env
@@ -72,7 +72,7 @@ jobs:
       # and check test coverage percentage
       - name: Check test coverage is above threshold
         env:
-          TESTCOVERAGE_THRESHOLD: 45
+          TESTCOVERAGE_THRESHOLD: 80
         run: |
           echo "Checking test coverage is above threshold..."
           echo "Threshold             : $TESTCOVERAGE_THRESHOLD %"
