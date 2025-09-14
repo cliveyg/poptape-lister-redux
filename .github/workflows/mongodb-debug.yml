@@ -9,7 +9,7 @@ on:
 
 jobs:
   test-mongo:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     services:
       mongodb:
         image: mongo:7
