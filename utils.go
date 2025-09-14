@@ -1,10 +1,9 @@
-package utils
+package main
 
 import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"github.com/google/uuid"
 	"os"
 	"regexp"
 	"strconv"
@@ -16,23 +15,14 @@ import (
 // Random and UUID utilities
 
 // GenerateRandomString generates a random hex string of specified length
-func GenerateRandomString(length int) (string, error) {
-	bytes := make([]byte, length/2)
-	if _, err := rand.Read(bytes); err != nil {
+func GenerateRandomString(n int) (string, error) {
+	b := make([]byte, (n+1)/2)
+	_, err := rand.Read(b)
+	if err != nil {
 		return "", err
 	}
-	return hex.EncodeToString(bytes), nil
-}
-
-// GenerateUUID creates a new UUID string
-func GenerateUUID() string {
-	return uuid.New().String()
-}
-
-// IsValidUUID checks if a string is a valid UUID
-func IsValidUUID(u string) bool {
-	_, err := uuid.Parse(u)
-	return err == nil
+	s := hex.EncodeToString(b)
+	return s[:n], nil // always trim to n
 }
 
 func NormalizeListType(listType string) string {
