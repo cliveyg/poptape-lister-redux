@@ -38,14 +38,14 @@ jobs:
           echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
           sudo apt-get update && sudo apt-get install -y mongodb-mongosh  
 
-      - name: Wait for MongoDB to be ready
-        run: |
-          for i in {1..30}; do
-            nc -zv mongodb 27017 && echo Success && exit 0
-            echo "Waiting for MongoDB..."
-            sleep 2
-          done
-          echo "MongoDB never came up" && exit 1
+#      - name: Wait for MongoDB to be ready
+#        run: |
+#          for i in {1..30}; do
+#            nc -zv mongodb 27017 && echo Success && exit 0
+#            echo "Waiting for MongoDB..."
+#            sleep 2
+#          done
+#          echo "MongoDB never came up" && exit 1
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -61,7 +61,7 @@ jobs:
 
       - name: Override MONGO_URI for CI
         run: |
-          echo "MONGO_URI=mongodb://lister_test:${{ secrets.TESTDB_PASSWORD }}@mongodb:27017/lister_test?authSource=admin" >> .env
+          echo "MONGO_URI=mongodb://lister_test:${{ secrets.TESTDB_PASSWORD }}@localhost:27017/lister_test?authSource=admin" >> .env
 
       - name: Run go test and generate test coverage file
         run: |
