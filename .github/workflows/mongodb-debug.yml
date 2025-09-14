@@ -1,25 +1,18 @@
-name: Build app & run testsuite
+name: MongoDB Service Debug
 permissions:
-  contents: read
+  contents: none
+  issues: none
+  pull-requests: none
+
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-  schedule:
-    - cron: '0 11 * * 1' # run "At 11:00 on Monday"
+  workflow_dispatch:
 
 jobs:
-  all-tests:
-    name: Run testsuite
+  test-mongo:
     runs-on: ubuntu-latest
     services:
       mongodb:
         image: mongo:7
-        env:
-          MONGO_INITDB_ROOT_USERNAME: lister_test
-          MONGO_INITDB_ROOT_PASSWORD: "${{ secrets.TESTDB_PASSWORD }}"
-          MONGO_INITDB_DATABASE: lister_test
         ports:
           - 27017:27017
         options: >-
@@ -27,12 +20,11 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-
     steps:
-      - uses: actions/checkout@v4
-      - name: Debug: List /etc/hosts
+      - name: Print /etc/hosts
         run: cat /etc/hosts
-      - name: Debug: Try to ping MongoDB
+
+      - name: Try ping mongodb
         run: |
           for i in {1..10}; do
             ping -c 1 mongodb && echo "PING SUCCESS" && exit 0
@@ -41,3 +33,6 @@ jobs:
           done
           echo "Failed to resolve/ping mongodb"
           exit 1
+
+      - name: Try ping localhost
+        run: ping -c 1 localhost
