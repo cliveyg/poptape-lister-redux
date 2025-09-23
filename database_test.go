@@ -365,34 +365,39 @@ func (suite *DatabaseTestSuite) TestConcurrentOperations() {
 // ---- EXTRA COVERAGE TESTS ----
 
 func TestAppInitialiseDatabaseTwice(t *testing.T) {
-	app := &App{}
+	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
+	app := &App{Log: &logger}
 	app.initialiseDatabase()
 	app.initialiseDatabase() // Should not panic
 	app.Cleanup()
 }
 
 func TestAppCleanupMultipleTimes(t *testing.T) {
-	app := &App{}
+	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
+	app := &App{Log: &logger}
 	app.initialiseDatabase()
 	app.Cleanup()
 	app.Cleanup() // Should not panic
 }
 
 func TestAppGetCollectionNilName(t *testing.T) {
-	app := &App{}
+	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
+	app := &App{Log: &logger}
 	coll := app.GetCollection("")
 	assert.Nil(t, coll)
 }
 
 func TestAppGetCollectionNonexistent(t *testing.T) {
-	app := &App{}
+	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
+	app := &App{Log: &logger}
 	app.initialiseDatabase()
 	coll := app.GetCollection("doesnotexist")
 	assert.Nil(t, coll)
 }
 
 func TestDatabaseConnectionFailure(t *testing.T) {
-	app := &App{}
+	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
+	app := &App{Log: &logger}
 	app.initialiseDatabase()
 	if app.Client != nil {
 		_ = app.Client.Disconnect(context.Background())
