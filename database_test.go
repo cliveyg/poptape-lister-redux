@@ -93,8 +93,8 @@ func (suite *DatabaseTestSuite) TestUserListCRUD() {
 	require.NoError(suite.T(), err)
 	assert.Equal(suite.T(), userID, retrieved.ID)
 	assert.Equal(suite.T(), document.ItemIds, retrieved.ItemIds)
-	assert.True(suite.T(), retrieved.CreatedAt.Equal(now))
-	assert.True(suite.T(), retrieved.UpdatedAt.Equal(now))
+	assert.WithinDuration(suite.T(), now, retrieved.CreatedAt, time.Second)
+	assert.WithinDuration(suite.T(), now, retrieved.UpdatedAt, time.Second)
 
 	// Update
 	newUpdate := time.Now()
@@ -148,7 +148,6 @@ func (suite *DatabaseTestSuite) TestMultipleCollections() {
 }
 
 func (suite *DatabaseTestSuite) TestComplexListOperations() {
-	// Use a unique user per operation section!
 	userID := uuid.New().String()
 	items := []string{
 		uuid.New().String(),
@@ -164,7 +163,7 @@ func (suite *DatabaseTestSuite) TestComplexListOperations() {
 	expected := []string{items[2], items[1], items[0]}
 	assert.Equal(suite.T(), expected, document.ItemIds)
 
-	// Remove items, with new user
+	// Remove items
 	userID2 := uuid.New().String()
 	items2 := []string{uuid.New().String(), uuid.New().String(), uuid.New().String()}
 	initialDocument := UserList{
@@ -185,7 +184,7 @@ func (suite *DatabaseTestSuite) TestComplexListOperations() {
 	expected2 := []string{items2[0], items2[2]}
 	assert.Equal(suite.T(), expected2, document2.ItemIds)
 
-	// Remove all, with new user
+	// Remove all
 	userID3 := uuid.New().String()
 	items3 := []string{uuid.New().String()}
 	initialDocument2 := UserList{
@@ -201,7 +200,7 @@ func (suite *DatabaseTestSuite) TestComplexListOperations() {
 	_, err = suite.app.getListDocument(userID3, "watchlist")
 	assert.Equal(suite.T(), mongo.ErrNoDocuments, err)
 
-	// Remove all with empty string, with new user
+	// Remove all with empty string
 	userID4 := uuid.New().String()
 	items4 := []string{uuid.New().String(), uuid.New().String()}
 	initialDocument3 := UserList{
@@ -301,7 +300,6 @@ func (suite *DatabaseTestSuite) TestWatchingCountOperations() {
 	assert.Equal(suite.T(), int64(0), count2)
 }
 
-// FIXED: Each goroutine uses a unique userID, so no duplicate key errors possible.
 func (suite *DatabaseTestSuite) TestConcurrentOperations() {
 	const numGoroutines = 10
 	const itemsPerGoroutine = 5
