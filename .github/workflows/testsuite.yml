@@ -130,3 +130,9 @@ jobs:
         with:
           name: coverage
           path: coverage.out
+
+      - name: Create coverage badges
+        uses: gaelgirodon/ci-badges-action@v1
+        with:
+          gist-id: d3496d4edcc5b63763adc9f85d5c63e2
+          token: ${{ secrets.GIST_TOKEN }}
