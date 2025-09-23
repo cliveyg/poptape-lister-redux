@@ -16,9 +16,9 @@ jobs:
     services:
       mongodb:
         image: mongo
-        env:
-          MONGO_INITDB_ROOT_USERNAME: lister_test
-          MONGO_INITDB_ROOT_PASSWORD: ${{ secrets.TESTDB_PASSWORD }}
+#        env:
+#          MONGO_INITDB_ROOT_USERNAME: lister_test
+#          MONGO_INITDB_ROOT_PASSWORD: ${{ secrets.TESTDB_PASSWORD }}
 #          MONGO_INITDB_DATABASE: lister_test
         ports:
           - 27017:27017
@@ -60,8 +60,10 @@ jobs:
           echo "${{ secrets.ENV_FILE }}" > .env
 
       - name: Override MONGO_URI for CI
+#        run: |
+#          echo "MONGO_URI=mongodb://lister_test:${{ secrets.TESTDB_PASSWORD }}@localhost:27017/lister_test" >> .env
         run: |
-          echo "MONGO_URI=mongodb://lister_test:${{ secrets.TESTDB_PASSWORD }}@localhost:27017/lister_test" >> .env
+          echo "MONGO_URI=mongodb://mongodb:27017/lister_test" >> .env
 
       - name: Run go test and generate test coverage file
         run: |
