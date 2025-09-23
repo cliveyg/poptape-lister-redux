@@ -186,9 +186,7 @@ func (suite *MiddlewareTestSuite) TestAuthMiddleware() {
 	token := "valid-test-token"
 	suite.Run("should allow requests with valid token", func() {
 		httpmock.RegisterResponder("GET", authServiceTestURL,
-			httpmock.NewJsonResponderOrPanic(200, map[string]string{
-				"public_id": publicID,
-			}))
+			httpmock.NewJsonResponderOrPanic(200, map[string]string{"public_id": publicID}))
 		suite.router.Use(suite.app.AuthMiddleware())
 		suite.router.GET("/test", func(c *gin.Context) {
 			receivedID, exists := c.Get("public_id")
@@ -278,9 +276,7 @@ func (suite *MiddlewareTestSuite) TestAuthMiddleware() {
 
 	suite.Run("should handle missing public_id in response", func() {
 		httpmock.RegisterResponder("GET", authServiceTestURL,
-			httpmock.NewJsonResponderOrPanic(200, map[string]string{
-				"other_field": "value",
-			}))
+			httpmock.NewJsonResponderOrPanic(200, map[string]string{"other_field": "value"}))
 		suite.router.Use(suite.app.AuthMiddleware())
 		suite.router.GET("/test", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"message": "success"})
@@ -298,9 +294,7 @@ func (suite *MiddlewareTestSuite) TestAuthMiddleware() {
 
 	suite.Run("should handle invalid UUID in public_id", func() {
 		httpmock.RegisterResponder("GET", authServiceTestURL,
-			httpmock.NewJsonResponderOrPanic(200, map[string]string{
-				"public_id": "invalid-uuid-format",
-			}))
+			httpmock.NewJsonResponderOrPanic(200, map[string]string{"public_id": "invalid-uuid-format"}))
 		suite.router.Use(suite.app.AuthMiddleware())
 		suite.router.GET("/test", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"message": "success"})
@@ -361,9 +355,7 @@ func (suite *MiddlewareTestSuite) TestAuthMiddleware() {
 			func(req *http.Request) (*http.Response, error) {
 				assert.Equal(suite.T(), token, req.Header.Get("X-Access-Token"))
 				assert.Equal(suite.T(), "application/json", req.Header.Get("Content-Type"))
-				return httpmock.NewJsonResponse(200, map[string]string{
-					"public_id": publicID,
-				})
+				return httpmock.NewJsonResponse(200, map[string]string{"public_id": publicID})
 			})
 		suite.router.Use(suite.app.AuthMiddleware())
 		suite.router.GET("/test", func(c *gin.Context) {

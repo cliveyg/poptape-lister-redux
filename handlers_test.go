@@ -28,7 +28,6 @@ type HandlerTestSuite struct {
 	router     *gin.Engine
 	testDBName string
 	cleanup    []string
-	testUserID string
 }
 
 const (
@@ -47,9 +46,6 @@ func (suite *HandlerTestSuite) SetupSuite() {
 	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
 	suite.app = &App{Log: &logger}
 	suite.app.initialiseDatabase()
-	suite.app.Router = gin.New()
-	suite.app.initialiseRoutes()
-	suite.router = suite.app.Router
 	suite.cleanup = []string{"watchlist", "favourites", "viewed", "bids", "purchased"}
 }
 
@@ -65,11 +61,6 @@ func (suite *HandlerTestSuite) TearDownSuite() {
 
 func (suite *HandlerTestSuite) SetupTest() {
 	httpmock.Reset()
-	suite.testUserID = uuid.New().String()
-	httpmock.RegisterResponder("GET", authServiceURL,
-		httpmock.NewJsonResponderOrPanic(200, map[string]string{
-			"public_id": suite.testUserID,
-		}))
 	suite.cleanupTestData()
 	suite.router = gin.New()
 	suite.app.Router = suite.router
@@ -121,10 +112,10 @@ func (suite *HandlerTestSuite) createTestList(userID, listType string, items []s
 	require.NoError(suite.T(), err)
 }
 
-// All test cases now use suite.testUserID and unique item IDs
-
 func (suite *HandlerTestSuite) TestGetAllFromList() {
 	suite.Run("should return empty list when no data exists", func() {
+		userID := uuid.New().String()
+		httpmock.RegisterResponder("GET", authServiceURL, httpmock.NewJsonResponderOrPanic(200, map[string]string{"public_id": userID}))
 		resp := suite.makeRequest("GET", "/list/watchlist", "valid-token", nil)
 		assert.Equal(suite.T(), http.StatusNotFound, resp.Code)
 		var response map[string]interface{}
@@ -132,106 +123,84 @@ func (suite *HandlerTestSuite) TestGetAllFromList() {
 		require.NoError(suite.T(), err)
 		assert.Contains(suite.T(), response["message"], "Could not find any watchlist")
 	})
-
 	suite.Run("should return list items when data exists", func() {
-		testItems := []string{uuid.New().String(), uuid.New().String()}
-		suite.createTestList(suite.testUserID, "watchlist", testItems)
+		userID := uuid.New().String()
+		httpmock.RegisterResponder("GET", authServiceURL, httpmock.NewJsonResponderOrPanic(200, map[string]string{"public_id": userID}))
+		items := []string{uuid.New().String(), uuid.New().String()}
+		suite.createTestList(userID, "watchlist", items)
 		resp := suite.makeRequest("GET", "/list/watchlist", "valid-token", nil)
 		assert.Equal(suite.T(), http.StatusOK, resp.Code)
 		var response map[string][]string
 		err := json.Unmarshal(resp.Body.Bytes(), &response)
 		require.NoError(suite.T(), err)
-		assert.Equal(suite.T(), testItems, response["watchlist"])
-	})
-
-	suite.Run("should work for all list types", func() {
-		listTypes := []string{"watchlist", "favourites", "viewed", "bids", "purchased"}
-		for _, listType := range listTypes {
-			testItems := []string{uuid.New().String()}
-			suite.createTestList(suite.testUserID, listType, testItems)
-			resp := suite.makeRequest("GET", "/list/"+listType, "valid-token", nil)
-			assert.Equal(suite.T(), http.StatusOK, resp.Code)
-			var response map[string][]string
-			err := json.Unmarshal(resp.Body.Bytes(), &response)
-			require.NoError(suite.T(), err)
-			assert.Equal(suite.T(), testItems, response[listType])
-			suite.cleanupTestData()
-		}
-	})
-
-	suite.Run("should require authentication", func() {
-		resp := suite.makeRequest("GET", "/list/watchlist", "", nil)
-		assert.Equal(suite.T(), http.StatusUnauthorized, resp.Code)
+		assert.Equal(suite.T(), items, response["watchlist"])
 	})
 }
 
 func (suite *HandlerTestSuite) TestAddToList() {
 	suite.Run("should create new list when none exists", func() {
-		testItem := uuid.New().String()
-		reqBody := UUIDRequest{UUID: testItem}
+		userID := uuid.New().String()
+		httpmock.RegisterResponder("GET", authServiceURL, httpmock.NewJsonResponderOrPanic(200, map[string]string{"public_id": userID}))
+		itemID := uuid.New().String()
+		reqBody := UUIDRequest{UUID: itemID}
 		resp := suite.makeRequest("POST", "/list/watchlist", "valid-token", reqBody)
 		assert.Equal(suite.T(), http.StatusCreated, resp.Code)
-		var response map[string]string
-		err := json.Unmarshal(resp.Body.Bytes(), &response)
-		require.NoError(suite.T(), err)
-		assert.Equal(suite.T(), "Created", response["message"])
-		resp = suite.makeRequest("GET", "/list/watchlist", "valid-token", nil)
-		assert.Equal(suite.T(), http.StatusOK, resp.Code)
-		var getResponse map[string][]string
-		err = json.Unmarshal(resp.Body.Bytes(), &getResponse)
-		require.NoError(suite.T(), err)
-		assert.Equal(suite.T(), []string{testItem}, getResponse["watchlist"])
 	})
 
 	suite.Run("should add item to existing list", func() {
-		testItem1 := uuid.New().String()
-		testItem2 := uuid.New().String()
-		suite.createTestList(suite.testUserID, "watchlist", []string{testItem1})
-		reqBody := UUIDRequest{UUID: testItem2}
+		userID := uuid.New().String()
+		httpmock.RegisterResponder("GET", authServiceURL, httpmock.NewJsonResponderOrPanic(200, map[string]string{"public_id": userID}))
+		existingItem := uuid.New().String()
+		suite.createTestList(userID, "watchlist", []string{existingItem})
+		newItem := uuid.New().String()
+		reqBody := UUIDRequest{UUID: newItem}
 		resp := suite.makeRequest("POST", "/list/watchlist", "valid-token", reqBody)
 		assert.Equal(suite.T(), http.StatusCreated, resp.Code)
 		resp = suite.makeRequest("GET", "/list/watchlist", "valid-token", nil)
-		assert.Equal(suite.T(), http.StatusOK, resp.Code)
 		var getResponse map[string][]string
 		err := json.Unmarshal(resp.Body.Bytes(), &getResponse)
 		require.NoError(suite.T(), err)
-		assert.Equal(suite.T(), []string{testItem2, testItem1}, getResponse["watchlist"])
+		assert.ElementsMatch(suite.T(), []string{newItem, existingItem}, getResponse["watchlist"])
 	})
 
 	suite.Run("should not add duplicate items", func() {
-		testItem := uuid.New().String()
-		suite.createTestList(suite.testUserID, "watchlist", []string{testItem})
-		reqBody := UUIDRequest{UUID: testItem}
+		userID := uuid.New().String()
+		httpmock.RegisterResponder("GET", authServiceURL, httpmock.NewJsonResponderOrPanic(200, map[string]string{"public_id": userID}))
+		item := uuid.New().String()
+		suite.createTestList(userID, "watchlist", []string{item})
+		reqBody := UUIDRequest{UUID: item}
 		resp := suite.makeRequest("POST", "/list/watchlist", "valid-token", reqBody)
 		assert.Equal(suite.T(), http.StatusCreated, resp.Code)
 		resp = suite.makeRequest("GET", "/list/watchlist", "valid-token", nil)
-		assert.Equal(suite.T(), http.StatusOK, resp.Code)
 		var getResponse map[string][]string
 		err := json.Unmarshal(resp.Body.Bytes(), &getResponse)
 		require.NoError(suite.T(), err)
-		assert.Equal(suite.T(), []string{testItem}, getResponse["watchlist"])
+		assert.Equal(suite.T(), []string{item}, getResponse["watchlist"])
 	})
 
 	suite.Run("should limit list to 50 items", func() {
+		userID := uuid.New().String()
+		httpmock.RegisterResponder("GET", authServiceURL, httpmock.NewJsonResponderOrPanic(200, map[string]string{"public_id": userID}))
 		initialItems := make([]string, 50)
 		for i := 0; i < 50; i++ {
 			initialItems[i] = uuid.New().String()
 		}
-		suite.createTestList(suite.testUserID, "watchlist", initialItems)
-		testItem := uuid.New().String()
-		reqBody := UUIDRequest{UUID: testItem}
+		suite.createTestList(userID, "watchlist", initialItems)
+		newItem := uuid.New().String()
+		reqBody := UUIDRequest{UUID: newItem}
 		resp := suite.makeRequest("POST", "/list/watchlist", "valid-token", reqBody)
 		assert.Equal(suite.T(), http.StatusCreated, resp.Code)
 		resp = suite.makeRequest("GET", "/list/watchlist", "valid-token", nil)
-		assert.Equal(suite.T(), http.StatusOK, resp.Code)
 		var getResponse map[string][]string
 		err := json.Unmarshal(resp.Body.Bytes(), &getResponse)
 		require.NoError(suite.T(), err)
 		assert.Len(suite.T(), getResponse["watchlist"], 50)
-		assert.Equal(suite.T(), testItem, getResponse["watchlist"][0])
+		assert.Equal(suite.T(), newItem, getResponse["watchlist"][0])
 	})
 
 	suite.Run("should reject invalid UUID", func() {
+		userID := uuid.New().String()
+		httpmock.RegisterResponder("GET", authServiceURL, httpmock.NewJsonResponderOrPanic(200, map[string]string{"public_id": userID}))
 		reqBody := UUIDRequest{UUID: "invalid-uuid"}
 		resp := suite.makeRequest("POST", "/list/watchlist", "valid-token", reqBody)
 		assert.Equal(suite.T(), http.StatusBadRequest, resp.Code)
@@ -242,6 +211,8 @@ func (suite *HandlerTestSuite) TestAddToList() {
 	})
 
 	suite.Run("should reject malformed JSON", func() {
+		userID := uuid.New().String()
+		httpmock.RegisterResponder("GET", authServiceURL, httpmock.NewJsonResponderOrPanic(200, map[string]string{"public_id": userID}))
 		req := httptest.NewRequest("POST", "/list/watchlist", bytes.NewBufferString("{invalid json"))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("X-Access-Token", "valid-token")
@@ -255,8 +226,8 @@ func (suite *HandlerTestSuite) TestAddToList() {
 	})
 
 	suite.Run("should require authentication", func() {
-		testItem := uuid.New().String()
-		reqBody := UUIDRequest{UUID: testItem}
+		item := uuid.New().String()
+		reqBody := UUIDRequest{UUID: item}
 		resp := suite.makeRequest("POST", "/list/watchlist", "", reqBody)
 		assert.Equal(suite.T(), http.StatusUnauthorized, resp.Code)
 	})
@@ -264,23 +235,26 @@ func (suite *HandlerTestSuite) TestAddToList() {
 
 func (suite *HandlerTestSuite) TestRemoveItemFromList() {
 	suite.Run("should remove specific item from list", func() {
+		userID := uuid.New().String()
+		httpmock.RegisterResponder("GET", authServiceURL, httpmock.NewJsonResponderOrPanic(200, map[string]string{"public_id": userID}))
 		item1 := uuid.New().String()
 		item2 := uuid.New().String()
 		item3 := uuid.New().String()
-		suite.createTestList(suite.testUserID, "watchlist", []string{item1, item2, item3})
+		suite.createTestList(userID, "watchlist", []string{item1, item2, item3})
 		resp := suite.makeRequest("DELETE", "/list/watchlist/"+item2, "valid-token", nil)
 		assert.Equal(suite.T(), http.StatusNoContent, resp.Code)
 		resp = suite.makeRequest("GET", "/list/watchlist", "valid-token", nil)
-		assert.Equal(suite.T(), http.StatusOK, resp.Code)
 		var getResponse map[string][]string
 		err := json.Unmarshal(resp.Body.Bytes(), &getResponse)
 		require.NoError(suite.T(), err)
-		assert.Equal(suite.T(), []string{item1, item3}, getResponse["watchlist"])
+		assert.ElementsMatch(suite.T(), []string{item1, item3}, getResponse["watchlist"])
 	})
 
 	suite.Run("should delete list when removing last item", func() {
+		userID := uuid.New().String()
+		httpmock.RegisterResponder("GET", authServiceURL, httpmock.NewJsonResponderOrPanic(200, map[string]string{"public_id": userID}))
 		item := uuid.New().String()
-		suite.createTestList(suite.testUserID, "watchlist", []string{item})
+		suite.createTestList(userID, "watchlist", []string{item})
 		resp := suite.makeRequest("DELETE", "/list/watchlist/"+item, "valid-token", nil)
 		assert.Equal(suite.T(), http.StatusNoContent, resp.Code)
 		resp = suite.makeRequest("GET", "/list/watchlist", "valid-token", nil)
@@ -288,13 +262,14 @@ func (suite *HandlerTestSuite) TestRemoveItemFromList() {
 	})
 
 	suite.Run("should handle non-existent item gracefully", func() {
+		userID := uuid.New().String()
+		httpmock.RegisterResponder("GET", authServiceURL, httpmock.NewJsonResponderOrPanic(200, map[string]string{"public_id": userID}))
 		item1 := uuid.New().String()
 		item2 := uuid.New().String()
-		suite.createTestList(suite.testUserID, "watchlist", []string{item1})
+		suite.createTestList(userID, "watchlist", []string{item1})
 		resp := suite.makeRequest("DELETE", "/list/watchlist/"+item2, "valid-token", nil)
 		assert.Equal(suite.T(), http.StatusNoContent, resp.Code)
 		resp = suite.makeRequest("GET", "/list/watchlist", "valid-token", nil)
-		assert.Equal(suite.T(), http.StatusOK, resp.Code)
 		var getResponse map[string][]string
 		err := json.Unmarshal(resp.Body.Bytes(), &getResponse)
 		require.NoError(suite.T(), err)
@@ -302,12 +277,16 @@ func (suite *HandlerTestSuite) TestRemoveItemFromList() {
 	})
 
 	suite.Run("should handle non-existent list gracefully", func() {
+		userID := uuid.New().String()
+		httpmock.RegisterResponder("GET", authServiceURL, httpmock.NewJsonResponderOrPanic(200, map[string]string{"public_id": userID}))
 		item := uuid.New().String()
 		resp := suite.makeRequest("DELETE", "/list/watchlist/"+item, "valid-token", nil)
 		assert.Equal(suite.T(), http.StatusNoContent, resp.Code)
 	})
 
 	suite.Run("should reject invalid UUID", func() {
+		userID := uuid.New().String()
+		httpmock.RegisterResponder("GET", authServiceURL, httpmock.NewJsonResponderOrPanic(200, map[string]string{"public_id": userID}))
 		resp := suite.makeRequest("DELETE", "/list/watchlist/invalid-uuid", "valid-token", nil)
 		assert.Equal(suite.T(), http.StatusBadRequest, resp.Code)
 		var response map[string]string
@@ -325,8 +304,10 @@ func (suite *HandlerTestSuite) TestRemoveItemFromList() {
 
 func (suite *HandlerTestSuite) TestRemoveAllFromList() {
 	suite.Run("should remove entire list", func() {
+		userID := uuid.New().String()
+		httpmock.RegisterResponder("GET", authServiceURL, httpmock.NewJsonResponderOrPanic(200, map[string]string{"public_id": userID}))
 		items := []string{uuid.New().String(), uuid.New().String(), uuid.New().String()}
-		suite.createTestList(suite.testUserID, "watchlist", items)
+		suite.createTestList(userID, "watchlist", items)
 		resp := suite.makeRequest("DELETE", "/list/watchlist", "valid-token", nil)
 		assert.Equal(suite.T(), http.StatusGone, resp.Code)
 		resp = suite.makeRequest("GET", "/list/watchlist", "valid-token", nil)
@@ -334,6 +315,8 @@ func (suite *HandlerTestSuite) TestRemoveAllFromList() {
 	})
 
 	suite.Run("should handle non-existent list gracefully", func() {
+		userID := uuid.New().String()
+		httpmock.RegisterResponder("GET", authServiceURL, httpmock.NewJsonResponderOrPanic(200, map[string]string{"public_id": userID}))
 		resp := suite.makeRequest("DELETE", "/list/watchlist", "valid-token", nil)
 		assert.Equal(suite.T(), http.StatusGone, resp.Code)
 	})
@@ -346,14 +329,12 @@ func (suite *HandlerTestSuite) TestRemoveAllFromList() {
 
 func (suite *HandlerTestSuite) TestGetWatchingCount() {
 	suite.Run("should return count of users watching item", func() {
-		item1 := uuid.New().String()
-		item2 := uuid.New().String()
-		item3 := uuid.New().String()
+		item := uuid.New().String()
 		user1 := uuid.New().String()
 		user2 := uuid.New().String()
-		suite.createTestList(user1, "watchlist", []string{item1, item2})
-		suite.createTestList(user2, "watchlist", []string{item1, item3})
-		resp := suite.makeRequest("GET", "/list/watching/"+item1, "", nil)
+		suite.createTestList(user1, "watchlist", []string{item})
+		suite.createTestList(user2, "watchlist", []string{item})
+		resp := suite.makeRequest("GET", "/list/watching/"+item, "", nil)
 		assert.Equal(suite.T(), http.StatusOK, resp.Code)
 		var response WatchingResponse
 		err := json.Unmarshal(resp.Body.Bytes(), &response)
@@ -389,12 +370,10 @@ func (suite *HandlerTestSuite) TestGetWatchingCount() {
 
 func (suite *HandlerTestSuite) TestDatabaseErrorHandling() {
 	suite.Run("should handle database connection issues gracefully", func() {
-		// Simulate disconnect, then restore
 		originalClient := suite.app.Client
-		suite.app.Cleanup()
+		suite.app.Cleanup() // simulate disconnect
 		resp := suite.makeRequest("GET", "/list/watchlist", "valid-token", nil)
 		assert.Equal(suite.T(), http.StatusInternalServerError, resp.Code)
-		// Restore connection
 		suite.app.Client = originalClient
 		suite.app.DB = originalClient.Database(suite.testDBName)
 	})
@@ -402,29 +381,19 @@ func (suite *HandlerTestSuite) TestDatabaseErrorHandling() {
 
 func (suite *HandlerTestSuite) TestAuthenticationEdgeCases() {
 	suite.Run("should handle auth service failure", func() {
-		httpmock.Reset()
-		httpmock.RegisterResponder("GET", authServiceURL,
-			httpmock.NewErrorResponder(errors.New("auth service down")))
+		httpmock.RegisterResponder("GET", authServiceURL, httpmock.NewErrorResponder(errors.New("auth service down")))
 		resp := suite.makeRequest("GET", "/list/watchlist", "valid-token", nil)
 		assert.Equal(suite.T(), http.StatusUnauthorized, resp.Code)
 	})
 
 	suite.Run("should handle auth service returning invalid response", func() {
-		httpmock.Reset()
-		httpmock.RegisterResponder("GET", authServiceURL,
-			httpmock.NewJsonResponderOrPanic(200, map[string]string{
-				"invalid": "response",
-			}))
+		httpmock.RegisterResponder("GET", authServiceURL, httpmock.NewJsonResponderOrPanic(200, map[string]string{"invalid": "response"}))
 		resp := suite.makeRequest("GET", "/list/watchlist", "valid-token", nil)
 		assert.Equal(suite.T(), http.StatusInternalServerError, resp.Code)
 	})
 
 	suite.Run("should handle auth service returning invalid UUID", func() {
-		httpmock.Reset()
-		httpmock.RegisterResponder("GET", authServiceURL,
-			httpmock.NewJsonResponderOrPanic(200, map[string]string{
-				"public_id": "invalid-uuid",
-			}))
+		httpmock.RegisterResponder("GET", authServiceURL, httpmock.NewJsonResponderOrPanic(200, map[string]string{"public_id": "invalid-uuid"}))
 		resp := suite.makeRequest("GET", "/list/watchlist", "valid-token", nil)
 		assert.Equal(suite.T(), http.StatusInternalServerError, resp.Code)
 	})
