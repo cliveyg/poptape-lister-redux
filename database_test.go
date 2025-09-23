@@ -59,6 +59,8 @@ func (suite *DatabaseTestSuite) cleanupTestData() {
 	}
 }
 
+// --- Each subtest uses unique data and is fully isolated ---
+
 func (suite *DatabaseTestSuite) TestDatabaseConnection() {
 	assert.NotNil(suite.T(), suite.app.Client)
 	assert.NotNil(suite.T(), suite.app.DB)
@@ -148,6 +150,7 @@ func (suite *DatabaseTestSuite) TestMultipleCollections() {
 }
 
 func (suite *DatabaseTestSuite) TestComplexListOperations() {
+	// Use a unique user per operation section!
 	userID := uuid.New().String()
 	items := []string{
 		uuid.New().String(),
@@ -163,10 +166,11 @@ func (suite *DatabaseTestSuite) TestComplexListOperations() {
 	expected := []string{items[2], items[1], items[0]}
 	assert.Equal(suite.T(), expected, document.ItemIds)
 
-	// Remove items
+	// Remove items, with new user
+	userID2 := uuid.New().String()
 	items2 := []string{uuid.New().String(), uuid.New().String(), uuid.New().String()}
 	initialDocument := UserList{
-		ID:        userID,
+		ID:        userID2,
 		ItemIds:   items2,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
@@ -176,45 +180,48 @@ func (suite *DatabaseTestSuite) TestComplexListOperations() {
 	collection := suite.app.GetCollection("watchlist")
 	_, err = collection.InsertOne(ctx, initialDocument)
 	require.NoError(suite.T(), err)
-	err = suite.app.removeFromList(userID, "watchlist", items2[1])
+	err = suite.app.removeFromList(userID2, "watchlist", items2[1])
 	require.NoError(suite.T(), err)
-	document2, err := suite.app.getListDocument(userID, "watchlist")
+	document2, err := suite.app.getListDocument(userID2, "watchlist")
 	require.NoError(suite.T(), err)
 	expected2 := []string{items2[0], items2[2]}
 	assert.Equal(suite.T(), expected2, document2.ItemIds)
 
-	// Remove all
+	// Remove all, with new user
+	userID3 := uuid.New().String()
 	items3 := []string{uuid.New().String()}
 	initialDocument2 := UserList{
-		ID:        userID,
+		ID:        userID3,
 		ItemIds:   items3,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
 	_, err = collection.InsertOne(ctx, initialDocument2)
 	require.NoError(suite.T(), err)
-	err = suite.app.removeFromList(userID, "watchlist", items3[0])
+	err = suite.app.removeFromList(userID3, "watchlist", items3[0])
 	require.NoError(suite.T(), err)
-	_, err = suite.app.getListDocument(userID, "watchlist")
+	_, err = suite.app.getListDocument(userID3, "watchlist")
 	assert.Equal(suite.T(), mongo.ErrNoDocuments, err)
 
-	// Remove all with empty string
+	// Remove all with empty string, with new user
+	userID4 := uuid.New().String()
 	items4 := []string{uuid.New().String(), uuid.New().String()}
 	initialDocument3 := UserList{
-		ID:        userID,
+		ID:        userID4,
 		ItemIds:   items4,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
 	_, err = collection.InsertOne(ctx, initialDocument3)
 	require.NoError(suite.T(), err)
-	err = suite.app.removeFromList(userID, "watchlist", "")
+	err = suite.app.removeFromList(userID4, "watchlist", "")
 	require.NoError(suite.T(), err)
-	_, err = suite.app.getListDocument(userID, "watchlist")
+	_, err = suite.app.getListDocument(userID4, "watchlist")
 	assert.Equal(suite.T(), mongo.ErrNoDocuments, err)
 }
 
 func (suite *DatabaseTestSuite) TestEdgeCases() {
+	// Unique user per edge case
 	userID := uuid.New().String()
 	items := make([]string, 50)
 	for i := 0; i < 50; i++ {
@@ -240,7 +247,7 @@ func (suite *DatabaseTestSuite) TestEdgeCases() {
 	assert.Equal(suite.T(), newItem, document.ItemIds[0])
 	assert.NotContains(suite.T(), document.ItemIds, items[49])
 
-	// Duplicates
+	// Duplicates, with new user
 	userID2 := uuid.New().String()
 	item := uuid.New().String()
 	err = suite.app.addToList(userID2, "watchlist", item)
