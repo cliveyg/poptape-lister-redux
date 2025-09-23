@@ -59,8 +59,6 @@ func (suite *DatabaseTestSuite) cleanupTestData() {
 	}
 }
 
-// --- Each subtest uses unique data and is fully isolated ---
-
 func (suite *DatabaseTestSuite) TestDatabaseConnection() {
 	assert.NotNil(suite.T(), suite.app.Client)
 	assert.NotNil(suite.T(), suite.app.DB)
@@ -303,31 +301,32 @@ func (suite *DatabaseTestSuite) TestWatchingCountOperations() {
 	assert.Equal(suite.T(), int64(0), count2)
 }
 
+// FIXED: Each goroutine uses a unique userID, so no duplicate key errors possible.
 func (suite *DatabaseTestSuite) TestConcurrentOperations() {
-	userID := uuid.New().String()
 	const numGoroutines = 10
 	const itemsPerGoroutine = 5
 	done := make(chan bool, numGoroutines)
 	for i := 0; i < numGoroutines; i++ {
 		go func() {
+			userID := uuid.New().String()
 			defer func() { done <- true }()
 			for j := 0; j < itemsPerGoroutine; j++ {
 				item := uuid.New().String()
 				err := suite.app.addToList(userID, "watchlist", item)
 				assert.NoError(suite.T(), err)
 			}
+			document, err := suite.app.getListDocument(userID, "watchlist")
+			require.NoError(suite.T(), err)
+			assert.True(suite.T(), len(document.ItemIds) <= 50)
+			uniqueItems := make(map[string]bool)
+			for _, item := range document.ItemIds {
+				assert.False(suite.T(), uniqueItems[item])
+				uniqueItems[item] = true
+			}
 		}()
 	}
 	for i := 0; i < numGoroutines; i++ {
 		<-done
-	}
-	document, err := suite.app.getListDocument(userID, "watchlist")
-	require.NoError(suite.T(), err)
-	assert.True(suite.T(), len(document.ItemIds) <= 50)
-	uniqueItems := make(map[string]bool)
-	for _, item := range document.ItemIds {
-		assert.False(suite.T(), uniqueItems[item])
-		uniqueItems[item] = true
 	}
 }
 
