@@ -109,7 +109,7 @@ func (suite *HandlerTestSuite) TestAddToList() {
 	suite.Run("should create new list when none exists", func() {
 		userID := uuid.New().String()
 		itemID := uuid.New().String()
-		body := map[string]string{"item_id": itemID}
+		body := map[string]string{"uuid": itemID}
 		httpmock.RegisterResponder("GET", authTestURL,
 			httpmock.NewJsonResponderOrPanic(200, map[string]string{"public_id": userID}),
 		)
@@ -124,9 +124,9 @@ func (suite *HandlerTestSuite) TestAddToList() {
 		httpmock.RegisterResponder("GET", authTestURL,
 			httpmock.NewJsonResponderOrPanic(200, map[string]string{"public_id": userID}),
 		)
-		body := map[string]string{"item_id": firstItem}
+		body := map[string]string{"uuid": firstItem}
 		_ = suite.doRequest("POST", "/list/watchlist", body, suite.token)
-		body = map[string]string{"item_id": secondItem}
+		body = map[string]string{"uuid": secondItem}
 		resp := suite.doRequest("POST", "/list/watchlist", body, suite.token)
 		assert.Equal(suite.T(), http.StatusCreated, resp.Code)
 	})
@@ -137,7 +137,7 @@ func (suite *HandlerTestSuite) TestAddToList() {
 		httpmock.RegisterResponder("GET", authTestURL,
 			httpmock.NewJsonResponderOrPanic(200, map[string]string{"public_id": userID}),
 		)
-		body := map[string]string{"item_id": itemID}
+		body := map[string]string{"uuid": itemID}
 		_ = suite.doRequest("POST", "/list/watchlist", body, suite.token)
 		resp := suite.doRequest("POST", "/list/watchlist", body, suite.token)
 		assert.Equal(suite.T(), http.StatusCreated, resp.Code)
@@ -149,7 +149,7 @@ func (suite *HandlerTestSuite) TestAddToList() {
 			httpmock.NewJsonResponderOrPanic(200, map[string]string{"public_id": userID}),
 		)
 		for i := 0; i < 60; i++ {
-			body := map[string]string{"item_id": uuid.New().String()}
+			body := map[string]string{"uuid": uuid.New().String()}
 			resp := suite.doRequest("POST", "/list/watchlist", body, suite.token)
 			assert.Equal(suite.T(), http.StatusCreated, resp.Code)
 		}
@@ -168,7 +168,7 @@ func (suite *HandlerTestSuite) TestAddToList() {
 		httpmock.RegisterResponder("GET", authTestURL,
 			httpmock.NewJsonResponderOrPanic(200, map[string]string{"public_id": userID}),
 		)
-		body := map[string]string{"item_id": "not-a-uuid"}
+		body := map[string]string{"uuid": "not-a-uuid"}
 		resp := suite.doRequest("POST", "/list/watchlist", body, suite.token)
 		assert.Equal(suite.T(), http.StatusBadRequest, resp.Code)
 	})
@@ -191,7 +191,7 @@ func (suite *HandlerTestSuite) TestAddToList() {
 		httpmock.RegisterResponder("GET", authTestURL,
 			httpmock.NewJsonResponderOrPanic(200, map[string]string{"public_id": userID}),
 		)
-		body := map[string]string{"item_id": uuid.New().String()}
+		body := map[string]string{"uuid": uuid.New().String()}
 		resp := suite.doRequest("POST", "/list/watchlist", body, "")
 		assert.Equal(suite.T(), http.StatusUnauthorized, resp.Code)
 	})
@@ -251,7 +251,7 @@ func (suite *HandlerTestSuite) TestGetAllFromList() {
 		httpmock.RegisterResponder("GET", authTestURL,
 			httpmock.NewJsonResponderOrPanic(200, map[string]string{"public_id": userID}),
 		)
-		body := map[string]string{"item_id": itemID}
+		body := map[string]string{"uuid": itemID}
 		_ = suite.doRequest("POST", "/list/watchlist", body, suite.token)
 		resp := suite.doRequest("GET", "/list/watchlist", nil, suite.token)
 		assert.Equal(suite.T(), http.StatusOK, resp.Code)
@@ -272,7 +272,7 @@ func (suite *HandlerTestSuite) TestGetWatchingCount() {
 			httpmock.NewJsonResponderOrPanic(200, map[string]string{"public_id": userID}),
 		)
 		for i := 0; i < 3; i++ {
-			body := map[string]string{"item_id": itemID}
+			body := map[string]string{"uuid": itemID}
 			_ = suite.doRequest("POST", "/list/watchlist", body, suite.token)
 		}
 		resp := suite.doRequest("GET", "/list/watching/"+itemID, nil, "")
@@ -316,7 +316,7 @@ func (suite *HandlerTestSuite) TestRemoveAllFromList() {
 		httpmock.RegisterResponder("GET", authTestURL,
 			httpmock.NewJsonResponderOrPanic(200, map[string]string{"public_id": userID}),
 		)
-		body := map[string]string{"item_id": itemID}
+		body := map[string]string{"uuid": itemID}
 		_ = suite.doRequest("POST", "/list/watchlist", body, suite.token)
 		resp := suite.doRequest("DELETE", "/list/watchlist", nil, suite.token)
 		assert.Equal(suite.T(), http.StatusGone, resp.Code)
@@ -348,7 +348,7 @@ func (suite *HandlerTestSuite) TestRemoveItemFromList() {
 		httpmock.RegisterResponder("GET", authTestURL,
 			httpmock.NewJsonResponderOrPanic(200, map[string]string{"public_id": userID}),
 		)
-		body := map[string]string{"item_id": itemID}
+		body := map[string]string{"uuid": itemID}
 		_ = suite.doRequest("POST", "/list/watchlist", body, suite.token)
 		resp := suite.doRequest("DELETE", "/list/watchlist/"+itemID, nil, suite.token)
 		assert.Equal(suite.T(), http.StatusNoContent, resp.Code)
@@ -360,7 +360,7 @@ func (suite *HandlerTestSuite) TestRemoveItemFromList() {
 		httpmock.RegisterResponder("GET", authTestURL,
 			httpmock.NewJsonResponderOrPanic(200, map[string]string{"public_id": userID}),
 		)
-		body := map[string]string{"item_id": itemID}
+		body := map[string]string{"uuid": itemID}
 		_ = suite.doRequest("POST", "/list/watchlist", body, suite.token)
 		resp := suite.doRequest("DELETE", "/list/watchlist/"+itemID, nil, suite.token)
 		assert.Equal(suite.T(), http.StatusNoContent, resp.Code)
