@@ -184,7 +184,7 @@ func (suite *DatabaseTestSuite) TestComplexListOperations() {
 	expected2 := []string{items2[0], items2[2]}
 	assert.Equal(suite.T(), expected2, document2.ItemIds)
 
-	// Remove all
+	// Remove all, with new user
 	userID3 := uuid.New().String()
 	items3 := []string{uuid.New().String()}
 	initialDocument2 := UserList{
@@ -200,7 +200,7 @@ func (suite *DatabaseTestSuite) TestComplexListOperations() {
 	_, err = suite.app.getListDocument(userID3, "watchlist")
 	assert.Equal(suite.T(), mongo.ErrNoDocuments, err)
 
-	// Remove all with empty string
+	// Remove all with empty string, with new user
 	userID4 := uuid.New().String()
 	items4 := []string{uuid.New().String(), uuid.New().String()}
 	initialDocument3 := UserList{
@@ -218,7 +218,6 @@ func (suite *DatabaseTestSuite) TestComplexListOperations() {
 }
 
 func (suite *DatabaseTestSuite) TestEdgeCases() {
-	// Unique user per edge case
 	userID := uuid.New().String()
 	items := make([]string, 50)
 	for i := 0; i < 50; i++ {
