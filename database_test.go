@@ -235,7 +235,6 @@ func (suite *DatabaseTestSuite) TestEdgeCases() {
 	_, err := collection.InsertOne(ctx, initialDocument)
 	require.NoError(suite.T(), err)
 
-	// Add new item and test
 	newItem := uuid.New().String()
 	err = suite.app.addToList(userID, "watchlist", newItem)
 	require.NoError(suite.T(), err)
@@ -278,7 +277,7 @@ func (suite *DatabaseTestSuite) TestEdgeCases() {
 	err = suite.app.removeFromList(userID3, "watchlist", items3[0])
 	require.NoError(suite.T(), err)
 	_, err = suite.app.getListDocument(userID3, "watchlist")
-	assert.Equal(suite.T(), mongo.ErrNoDocuments, err) // <-- Correct assertion
+	assert.Equal(suite.T(), mongo.ErrNoDocuments, err) // <--- Correct assertion
 
 	// Remove all with empty string, with new user: Should return mongo.ErrNoDocuments after removal
 	userID4 := uuid.New().String()
@@ -294,7 +293,7 @@ func (suite *DatabaseTestSuite) TestEdgeCases() {
 	err = suite.app.removeFromList(userID4, "watchlist", "")
 	require.NoError(suite.T(), err)
 	_, err = suite.app.getListDocument(userID4, "watchlist")
-	assert.Equal(suite.T(), mongo.ErrNoDocuments, err) // <-- Correct assertion
+	assert.Equal(suite.T(), mongo.ErrNoDocuments, err) // <--- Correct assertion
 }
 
 func (suite *DatabaseTestSuite) TestWatchingCountOperations() {
