@@ -390,6 +390,7 @@ func TestAppGetCollectionNilName(t *testing.T) {
 	os.Setenv("MONGO_URI", "mongodb://localhost:27017/lister_test")
 	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
 	app := &App{Log: &logger}
+	app.initialiseDatabase() // <-- THIS LINE ADDED
 	coll := app.GetCollection("")
 	assert.Nil(t, coll)
 }
