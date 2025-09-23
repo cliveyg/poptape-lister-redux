@@ -22,7 +22,6 @@ import (
 
 type RoutesTestSuite struct {
 	suite.Suite
-	// Remove shared app/router/db; use per-test instances
 }
 
 const (
@@ -128,7 +127,7 @@ func (suite *RoutesTestSuite) TestAuthenticatedRoutes() {
 				httpmock.NewJsonResponderOrPanic(200, map[string]string{
 					"public_id": uuid.New().String(),
 				}))
-			resp := makeRequest(router, "POST", "/list/"+listType, validAuthToken, "")
+			resp := makeRequest(router, "POST", "/list/"+listType, validAuthToken, "application/json")
 			assert.Equal(suite.T(), http.StatusBadRequest, resp.Code)
 		})
 
@@ -163,7 +162,7 @@ func (suite *RoutesTestSuite) TestAuthenticatedRoutes() {
 			defer cleanupDB(app, testDB)
 			resp := makeRequest(router, "GET", "/list/"+listType, "", "")
 			assert.Equal(suite.T(), http.StatusUnauthorized, resp.Code)
-			resp = makeRequest(router, "POST", "/list/"+listType, "", "")
+			resp = makeRequest(router, "POST", "/list/"+listType, "", "application/json")
 			assert.Equal(suite.T(), http.StatusUnauthorized, resp.Code)
 			validUUID := uuid.New().String()
 			resp = makeRequest(router, "DELETE", "/list/"+listType+"/"+validUUID, "", "")
@@ -268,7 +267,7 @@ func (suite *RoutesTestSuite) TestMiddlewareApplication() {
 		var response map[string]string
 		err := json.Unmarshal(resp.Body.Bytes(), &response)
 		require.NoError(suite.T(), err)
-		assert.Contains(suite.T(), response["message"], "Content-Type must be application/json")
+		assert.Contains(suite.T(), response["error"], "Content-Type must be application/json")
 	})
 
 	suite.Run("should not apply JSON middleware to GET requests", func() {
