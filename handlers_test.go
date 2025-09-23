@@ -156,7 +156,8 @@ func (suite *HandlerTestSuite) TestAddToList() {
 		)
 		for i := 0; i < 60; i++ {
 			body := map[string]string{"item_id": uuid.New().String()}
-			suite.doRequest("POST", "/list/watchlist", body, suite.token)
+			resp := suite.doRequest("POST", "/list/watchlist", body, suite.token)
+			assert.True(suite.T(), resp.Code == http.StatusCreated)
 		}
 		resp := suite.doRequest("GET", "/list/watchlist", nil, suite.token)
 		assert.Equal(suite.T(), http.StatusOK, resp.Code)
