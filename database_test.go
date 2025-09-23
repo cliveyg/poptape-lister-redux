@@ -98,17 +98,17 @@ func (suite *DatabaseTestSuite) cleanupTestData() {
 
 // Test database connection and initialization
 func (suite *DatabaseTestSuite) TestDatabaseConnection() {
-	//suite.Run("should connect to MongoDB successfully", func() {
-	//	assert.NotNil(suite.T(), suite.app.Client)
-	//	assert.NotNil(suite.T(), suite.app.DB)
-	//
-	//	// Test ping
-	//	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	//	defer cancel()
-	//
-	//	err := suite.app.Client.Ping(ctx, nil)
-	//	assert.NoError(suite.T(), err)
-	//})
+	suite.Run("should connect to MongoDB successfully", func() {
+		assert.NotNil(suite.T(), suite.app.Client)
+		assert.NotNil(suite.T(), suite.app.DB)
+		//
+		//	// Test ping
+		//	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		//	defer cancel()
+		//
+		//	err := suite.app.Client.Ping(ctx, nil)
+		//	assert.NoError(suite.T(), err)
+	})
 
 	suite.Run("should use correct database name from environment", func() {
 		assert.Equal(suite.T(), suite.testDBName, suite.app.DB.Name())
