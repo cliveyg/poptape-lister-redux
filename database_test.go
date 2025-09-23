@@ -108,7 +108,8 @@ func (suite *DatabaseTestSuite) TestUserListCRUD() {
 	err = collection.FindOne(ctx, bson.M{"_id": userID}).Decode(&retrieved2)
 	require.NoError(suite.T(), err)
 	assert.Equal(suite.T(), newItems, retrieved2.ItemIds)
-	assert.True(suite.T(), retrieved2.UpdatedAt.After(now))
+	// Fix: Use WithinDuration for time comparisons with MongoDB
+	assert.WithinDuration(suite.T(), newUpdate, retrieved2.UpdatedAt, time.Second)
 
 	// Delete
 	result3, err := collection.DeleteOne(ctx, bson.M{"_id": userID})
