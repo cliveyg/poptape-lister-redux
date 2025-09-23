@@ -31,8 +31,8 @@ const (
 
 func (suite *MiddlewareTestSuite) SetupSuite() {
 	_ = godotenv.Load()
-	gin.SetMode(gin.TestMode)
 	os.Setenv("AUTHYURL", authServiceTestURL)
+	gin.SetMode(gin.TestMode)
 	httpmock.Activate()
 }
 
@@ -45,7 +45,7 @@ func (suite *MiddlewareTestSuite) SetupTest() {
 	httpmock.Reset()
 	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
 	suite.app = &App{Log: &logger}
-	suite.router = gin.New() // Always new router per test!
+	suite.router = gin.New()
 }
 
 func (suite *MiddlewareTestSuite) TearDownTest() {
