@@ -1,27 +1,30 @@
+![All unit tests pass](https://github.com/cliveyg/poptape-lister-redux/actions/workflows/unit-test.yml/badge.svg)
+
 # poptape-lister-redux
 
-Golang microservice for Poptape Auction application list management - recently viewed, watchlists, watchers of items etc.
+Golang microservice for Poptape Auctions system.  List management: recently viewed, watchlists, watchers of items, etc.
 
-This is a Golang implementation of the [original Python poptape-lister](https://github.com/cliveyg/poptape-lister) microservice, following the project structure of [poptape-admin](https://github.com/cliveyg/poptape-admin).
+This is a Go implementation of the [original Python poptape-lister](https://github.com/cliveyg/poptape-lister) microservice.
 
-Please see [this gist](https://gist.github.com/cliveyg/cf77c295e18156ba74cda46949231d69) to see how this microservice works as part of the auction system software.
+See [this gist](https://gist.github.com/cliveyg/cf77c295e18156ba74cda46949231d69) for an overview of how this microservice fits into the auction system.
 
 ## Features
 
-- **MongoDB Integration**: Uses MongoDB for data storage
-- **Gin-Gonic Router**: Fast HTTP web framework for Go
-- **UUID Support**: Uses `github.com/google/uuid` library
-- **Dockerized**: Complete Docker setup with MongoDB
-- **Structured Logging**: Uses zerolog for structured logging
+- **MongoDB Integration**: Persistent data storage
+- **Gin-Gonic Router**: Fast HTTP web framework
+- **UUID Support**: Strong validation with `google/uuid`
+- **Dockerized**: Docker setup with MongoDB
+- **Structured Logging**: Uses zerolog for logs
 - **Middleware Support**: Authentication, CORS, rate limiting, JSON validation
 
 ## API Routes
 
 ### Authenticated Routes
 
-All authenticated routes require an `X-Access-Token` header containing a valid UUID (in production, this would be extracted from JWT tokens).
+All authenticated routes require an `x-access-token` header containing a JWT token. The token is passed to an external API for authorization.
 
 #### Watchlist Management
+
 ```
 GET /list/watchlist
 ```
@@ -30,10 +33,10 @@ Returns a list of item UUIDs for the authenticated user's watchlist.
 Example response:
 ```json
 {
-    "watchlist": [
-        "2a99371f-4188-49b8-a628-85e946540364",
-        "803be8ad-fe4b-4fb2-b8d8-fe9fcedfbb12"
-    ]
+  "watchlist": [
+    "2a99371f-4188-49b8-a628-85e946540364",
+    "803be8ad-fe4b-4fb2-b8d8-fe9fcedfbb12"
+  ]
 }
 ```
 
@@ -45,136 +48,134 @@ Adds an item to the user's watchlist.
 Example request:
 ```json
 {
-    "uuid": "2a99371f-4188-49b8-a628-85e946540364"
+  "uuid": "2a99371f-4188-49b8-a628-85e946540364"
 }
+```
+Returns:
+```json
+{
+  "message": "Created"
+}
+```
+
+```
+DELETE /list/watchlist/:itemId
+```
+Removes an item from the user's watchlist.
+
+Returns:
+```json
+{}
 ```
 
 ```
 DELETE /list/watchlist
 ```
-Removes an item from the user's watchlist.
+Removes all items from the user's watchlist.
 
-Example request:
+Returns:
 ```json
-{
-    "uuid": "2a99371f-4188-49b8-a628-85e946540364"
-}
+{}
 ```
 
 #### Recently Viewed Items
+
 ```
 GET /list/viewed
 ```
-Returns a list of item UUIDs for the authenticated user's recently viewed items.
+Returns a list of recently viewed item UUIDs.
 
 Example response:
 ```json
 {
-    "recently_viewed": [
-        "2a99371f-4188-49b8-a628-85e946540364",
-        "803be8ad-fe4b-4fb2-b8d8-fe9fcedfbb12"
-    ]
+  "viewed": [
+    "2a99371f-4188-49b8-a628-85e946540364",
+    "803be8ad-fe4b-4fb2-b8d8-fe9fcedfbb12"
+  ]
 }
 ```
 
 ```
 POST /list/viewed
 ```
-Adds an item to the user's recently viewed list.
+Adds an item to the recently viewed list.
 
 #### Favourite Sellers
+
 ```
 GET /list/favourites
 ```
-Returns a list of the user's favourite sellers.
+Returns a list of favourite seller UUIDs.
 
 Example response:
 ```json
-{   
-    "favourites": [
-        {
-            "username": "user_2a99371f",
-            "public_id": "2a99371f-4188-49b8-a628-85e946540364"
-        },
-        {
-            "username": "user_803be8ad", 
-            "public_id": "803be8ad-fe4b-4fb2-b8d8-fe9fcedfbb12"
-        }
-    ]
+{
+  "favourites": [
+    "2a99371f-4188-49b8-a628-85e946540364",
+    "803be8ad-fe4b-4fb2-b8d8-fe9fcedfbb12"
+  ]
 }
 ```
 
 ```
 POST /list/favourites
+DELETE /list/favourites/:itemId
 DELETE /list/favourites
 ```
-Add or remove favourite sellers.
+Add/remove favourite sellers (by their UUID).
 
 #### Recent Bids
+
 ```
-GET /list/bids
+GET /list/recentbids
 ```
-Returns the user's recent bids.
+Returns a list of recent bid UUIDs.
 
 Example response:
 ```json
 {
-    "bids": [
-        {
-            "auction_id": "a47cdbb5-2e45-4aef-af71-82736351f049",
-            "lot_id": "2a99371f-4188-49b8-a628-85e946540364",
-            "amount": 176.99
-        }
-    ]
+  "recentbids": [
+    "a47cdbb5-2e45-4aef-af71-82736351f049",
+    "2a99371f-4188-49b8-a628-85e946540364"
+  ]
 }
 ```
 
-```
-POST /list/bids
-```
-Add a recent bid record.
-
 #### Purchase History
+
 ```
 GET /list/purchased
 ```
-Returns the user's purchase history.
+Returns a list of purchased item UUIDs.
 
 Example response:
 ```json
 {
-    "purchased": [
-        {
-            "purchase_id": "a933d845-bf82-421c-bf5c-57f81c182912",
-            "auction_id": "a47cdbb5-2e45-4aef-af71-82736351f049",
-            "lot_id": "2a99371f-4188-49b8-a628-85e946540364",
-            "amount": 176.99
-        }
-    ]
+  "purchased": [
+    "a933d845-bf82-421c-bf5c-57f81c182912",
+    "a47cdbb5-2e45-4aef-af71-82736351f049"
+  ]
 }
 ```
-
-```
-POST /list/purchased
-```
-Add a purchase record.
 
 ### Public Routes
 
 #### Watching Count
+
 ```
-GET /list/watching/<item_id>
+GET /list/watching/:item_id
 ```
 Returns the total number of people watching an item (unauthenticated).
 
 Example response:
 ```json
 {
-    "people_watching": 10
+  "people_watching": 10
 }
 ```
 
 #### System Status
+
 ```
 GET /list/status
 ```
@@ -183,94 +184,10 @@ Returns system status (unauthenticated).
 Example response:
 ```json
 {
-    "message": "System running...",
-    "version": "v0.1.0"
+  "message": "System running...",
+  "version": "v0.1.0"
 }
 ```
-
-## Project Structure
-
-```
-├── lister.go          # Main entry point
-├── app.go             # App initialization
-├── models.go          # Data models and structures
-├── handlers.go        # HTTP request handlers
-├── routes.go          # Route definitions
-├── database.go        # MongoDB connection and operations
-├── middleware.go      # Authentication and other middleware
-├── helpers.go         # Helper functions
-├── utils/
-│   └── utils.go       # Utility functions
-├── Dockerfile         # Docker configuration
-├── docker-compose.yml # Docker Compose setup
-├── .env.example       # Environment configuration template
-├── go.mod            # Go module definition
-├── go.sum            # Go module checksums
-└── README.md         # This file
-```
-
-## Dependencies
-
-- **gin-gonic/gin**: HTTP web framework
-- **google/uuid**: UUID generation and validation
-- **joho/godotenv**: Environment variable loading
-- **rs/zerolog**: Structured logging
-- **go.mongodb.org/mongo-driver**: MongoDB driver
-
-## Installation & Setup
-
-### Prerequisites
-- Go 1.21 or higher
-- Docker and Docker Compose
-- MongoDB (if running locally)
-
-### Environment Configuration
-
-1. Copy the example environment file:
-   ```bash
-   cp .env.example .env
-   ```
-
-2. Edit `.env` with your configuration:
-   ```bash
-   # Server Configuration
-   PORT=8400
-   LOGLEVEL=info
-   LOGFILE=/root/log/lister.log
-   VERSION=v0.1.0
-
-   # MongoDB Configuration
-   MONGO_HOST=localhost
-   MONGO_PORT=27017
-   MONGO_USERNAME=lister_user
-   MONGO_PASSWORD=lister_password
-   MONGO_DATABASE=poptape_lister
-   ```
-
-### Running with Docker Compose
-
-1. Build and start the services:
-   ```bash
-   docker-compose up --build -d
-   ```
-
-2. The API will be available at `http://localhost:1600`
-3. MongoDB will be available at `localhost:1601`
-
-### Running Locally
-
-1. Install dependencies:
-   ```bash
-   go mod tidy
-   ```
-
-2. Make sure MongoDB is running and accessible
-
-3. Build and run the application:
-   ```bash
-   go build -o lister .
-   ./lister
-   ```
 
 ## Testing
 
@@ -280,15 +197,25 @@ You can test the API using curl or any HTTP client:
 # Check system status
 curl http://localhost:1600/list/status
 
-# Get watchlist (requires X-Public-ID header)
-curl -H "X-Public-ID: 2a99371f-4188-49b8-a628-85e946540364" \
+# Get watchlist (requires x-access-token header with JWT)
+curl -H "x-access-token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
      http://localhost:1600/list/watchlist
 
 # Add item to watchlist
 curl -X POST \
      -H "Content-Type: application/json" \
-     -H "X-Public-ID: 2a99371f-4188-49b8-a628-85e946540364" \
+     -H "x-access-token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
      -d '{"uuid":"803be8ad-fe4b-4fb2-b8d8-fe9fcedfbb12"}' \
+     http://localhost:1600/list/watchlist
+
+# Remove item from watchlist
+curl -X DELETE \
+     -H "x-access-token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
+     http://localhost:1600/list/watchlist/803be8ad-fe4b-4fb2-b8d8-fe9fcedfbb12
+
+# Remove all items from watchlist
+curl -X DELETE \
+     -H "x-access-token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
      http://localhost:1600/list/watchlist
 
 # Get watching count for an item (no auth required)
@@ -297,38 +224,35 @@ curl http://localhost:1600/list/watching/803be8ad-fe4b-4fb2-b8d8-fe9fcedfbb12
 
 ## Data Storage
 
-The application uses MongoDB collections named after the list types:
-- `watchlist` - User watchlist items
-- `favourites` - Favourite sellers
-- `viewed` - Recently viewed items  
-- `recentbids` - Recent bid records
-- `purchased` - Purchase history
+MongoDB collections are named after the list types:
+- `watchlist` - User watchlist items (UUID string array)
+- `favourites` - Favourite sellers (UUID string array)
+- `viewed` - Recently viewed items (UUID string array)
+- `recentbids` - Recent bid records (UUID string array)
+- `purchased` - Purchase history (UUID string array)
 
-Each document has the structure:
+Each document structure:
 ```json
 {
-    "_id": "user_public_id",
-    "list_type": "watchlist", 
-    "items": ["uuid1", "uuid2", ...],
-    "created_at": "2024-01-01T00:00:00Z",
-    "updated_at": "2024-01-01T00:00:00Z"
+  "_id": "public_id",
+  "item_ids": ["uuid1", "uuid2", ...],
+  "created_at": "2024-01-01T00:00:00Z",
+  "updated_at": "2024-01-01T00:00:00Z"
 }
 ```
-
-Lists are limited to 50 items and items are stored in most-recent-first order.
+Lists are limited to 50 items, stored in most-recent-first order.
 
 ## Notes
 
 - This microservice maintains the latest X number of things for each user
-- In production, you should implement proper JWT-based authentication
+- In production, use a JWT for `x-access-token` and external authorization
 - Consider implementing proper rate limiting for production use
-- The current implementation uses placeholder data for some complex responses (like bid amounts)
 
 ## TODO
 
-- Implement proper JWT authentication
-- Add comprehensive tests
-- Implement pagination for large lists
+- ~~Implement JWT authentication~~
+- ~~Add comprehensive tests~~
+- ~~Implement pagination for large lists~~
 - Add metrics and monitoring
 - Implement proper rate limiting
 - Add API documentation (OpenAPI/Swagger)
