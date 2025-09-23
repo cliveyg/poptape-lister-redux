@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -173,35 +172,4 @@ func TimeAgo(t time.Time) string {
 	default:
 		return t.Format("2006-01-02")
 	}
-}
-
-//-----------------------------------------------------------------------------
-// Environment utilities
-
-// GetEnvOrDefault returns environment variable value or default if not set
-func GetEnvOrDefault(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
-}
-
-// GetEnvAsInt returns environment variable as integer or default
-func GetEnvAsInt(key string, defaultValue int) int {
-	if value := os.Getenv(key); value != "" {
-		if intVal, err := strconv.Atoi(value); err == nil {
-			return intVal
-		}
-	}
-	return defaultValue
-}
-
-// GetEnvAsBool returns environment variable as boolean or default
-func GetEnvAsBool(key string, defaultValue bool) bool {
-	if value := os.Getenv(key); value != "" {
-		if boolVal, err := strconv.ParseBool(value); err == nil {
-			return boolVal
-		}
-	}
-	return defaultValue
 }
