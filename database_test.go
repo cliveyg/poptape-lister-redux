@@ -27,6 +27,7 @@ func (suite *DatabaseTestSuite) SetupSuite() {
 	_ = godotenv.Load()
 	suite.testDBName = "poptape_lister_db_test_" + uuid.New().String()[:8]
 	os.Setenv("MONGO_DATABASE", suite.testDBName)
+	os.Setenv("MONGO_URI", "mongodb://localhost:27017/lister_test")
 	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
 	suite.app = &App{Log: &logger}
 	suite.app.initialiseDatabase()
@@ -365,6 +366,8 @@ func (suite *DatabaseTestSuite) TestConcurrentOperations() {
 // ---- EXTRA COVERAGE TESTS ----
 
 func TestAppInitialiseDatabaseTwice(t *testing.T) {
+	os.Setenv("MONGO_DATABASE", "poptape_lister_db_test_"+uuid.New().String()[:8])
+	os.Setenv("MONGO_URI", "mongodb://localhost:27017/lister_test")
 	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
 	app := &App{Log: &logger}
 	app.initialiseDatabase()
@@ -373,6 +376,8 @@ func TestAppInitialiseDatabaseTwice(t *testing.T) {
 }
 
 func TestAppCleanupMultipleTimes(t *testing.T) {
+	os.Setenv("MONGO_DATABASE", "poptape_lister_db_test_"+uuid.New().String()[:8])
+	os.Setenv("MONGO_URI", "mongodb://localhost:27017/lister_test")
 	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
 	app := &App{Log: &logger}
 	app.initialiseDatabase()
@@ -381,6 +386,8 @@ func TestAppCleanupMultipleTimes(t *testing.T) {
 }
 
 func TestAppGetCollectionNilName(t *testing.T) {
+	os.Setenv("MONGO_DATABASE", "poptape_lister_db_test_"+uuid.New().String()[:8])
+	os.Setenv("MONGO_URI", "mongodb://localhost:27017/lister_test")
 	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
 	app := &App{Log: &logger}
 	coll := app.GetCollection("")
@@ -388,6 +395,8 @@ func TestAppGetCollectionNilName(t *testing.T) {
 }
 
 func TestAppGetCollectionNonexistent(t *testing.T) {
+	os.Setenv("MONGO_DATABASE", "poptape_lister_db_test_"+uuid.New().String()[:8])
+	os.Setenv("MONGO_URI", "mongodb://localhost:27017/lister_test")
 	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
 	app := &App{Log: &logger}
 	app.initialiseDatabase()
@@ -396,6 +405,8 @@ func TestAppGetCollectionNonexistent(t *testing.T) {
 }
 
 func TestDatabaseConnectionFailure(t *testing.T) {
+	os.Setenv("MONGO_DATABASE", "poptape_lister_db_test_"+uuid.New().String()[:8])
+	os.Setenv("MONGO_URI", "mongodb://localhost:27017/lister_test")
 	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
 	app := &App{Log: &logger}
 	app.initialiseDatabase()
