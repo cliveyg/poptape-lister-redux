@@ -261,6 +261,38 @@ func (suite *DatabaseTestSuite) TestEdgeCases() {
 	assert.Equal(suite.T(), mongo.ErrNoDocuments, err)
 	err = suite.app.removeFromList(nonExistentUser, "watchlist", uuid.New().String())
 	assert.NoError(suite.T(), err)
+
+	// Remove all, with new user
+	userID3 := uuid.New().String()
+	items3 := []string{uuid.New().String()}
+	initialDocument2 := UserList{
+		ID:        userID3,
+		ItemIds:   items3,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	_, err = collection.InsertOne(ctx, initialDocument2)
+	require.NoError(suite.T(), err)
+	err = suite.app.removeFromList(userID3, "watchlist", items3[0])
+	require.NoError(suite.T(), err)
+	_, err = suite.app.getListDocument(userID3, "watchlist")
+	assert.Equal(suite.T(), mongo.ErrNoDocuments, err)
+
+	// Remove all with empty string, with new user
+	userID4 := uuid.New().String()
+	items4 := []string{uuid.New().String(), uuid.New().String()}
+	initialDocument3 := UserList{
+		ID:        userID4,
+		ItemIds:   items4,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	_, err = collection.InsertOne(ctx, initialDocument3)
+	require.NoError(suite.T(), err)
+	err = suite.app.removeFromList(userID4, "watchlist", "")
+	require.NoError(suite.T(), err)
+	_, err = suite.app.getListDocument(userID4, "watchlist")
+	assert.Equal(suite.T(), mongo.ErrNoDocuments, err)
 }
 
 func (suite *DatabaseTestSuite) TestWatchingCountOperations() {
