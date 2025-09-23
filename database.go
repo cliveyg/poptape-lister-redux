@@ -16,6 +16,8 @@ func (a *App) initialiseDatabase() {
 	defer cancel()
 
 	mongoURI := os.Getenv("MONGO_URI")
+	a.Log.Info().Msg("-=-=-=-=-=-=-=-=-=-=-=-=-=-=-")
+	a.Log.Info().Msg(mongoURI)
 	clientOptions := options.Client().ApplyURI(mongoURI)
 
 	client, err := mongo.Connect(ctx, clientOptions)
