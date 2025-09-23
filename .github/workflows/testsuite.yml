@@ -1,4 +1,4 @@
-name: Build app & run testsuite
+name: Testsuite
 permissions:
   contents: read
 on:
