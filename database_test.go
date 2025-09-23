@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -108,7 +107,6 @@ func (suite *DatabaseTestSuite) TestUserListCRUD() {
 	err = collection.FindOne(ctx, bson.M{"_id": userID}).Decode(&retrieved2)
 	require.NoError(suite.T(), err)
 	assert.Equal(suite.T(), newItems, retrieved2.ItemIds)
-	// Fix: Use WithinDuration for time comparisons with MongoDB
 	assert.WithinDuration(suite.T(), newUpdate, retrieved2.UpdatedAt, time.Second)
 
 	// Delete
@@ -262,11 +260,8 @@ func (suite *DatabaseTestSuite) TestEdgeCases() {
 	// Non-existent user: Should return mongo.ErrNoDocuments
 	nonExistentUser := uuid.New().String()
 	_, err = suite.app.getListDocument(nonExistentUser, "watchlist")
-	fmt.Printf("DEBUG: getListDocument(nonExistentUser) err = %#v\n", err)
 	assert.Equal(suite.T(), mongo.ErrNoDocuments, err)
 	err = suite.app.removeFromList(nonExistentUser, "watchlist", uuid.New().String())
-	fmt.Printf("DEBUG: removeFromList(nonExistentUser) err = %#v\n", err)
-	// Accept mongo.ErrNoDocuments as a valid outcome
 	assert.True(suite.T(), err == nil || err == mongo.ErrNoDocuments,
 		"Expected no error or mongo.ErrNoDocuments when removing from non-existent user, got: %v", err)
 
@@ -284,8 +279,7 @@ func (suite *DatabaseTestSuite) TestEdgeCases() {
 	err = suite.app.removeFromList(userID3, "watchlist", items3[0])
 	require.NoError(suite.T(), err)
 	_, err = suite.app.getListDocument(userID3, "watchlist")
-	fmt.Printf("DEBUG: getListDocument(userID3) after remove err = %#v\n", err)
-	assert.Equal(suite.T(), mongo.ErrNoDocuments, err) // <-- Correct assertion
+	assert.Equal(suite.T(), mongo.ErrNoDocuments, err)
 
 	// Remove all with empty string, with new user: Should return mongo.ErrNoDocuments after removal
 	userID4 := uuid.New().String()
@@ -301,8 +295,7 @@ func (suite *DatabaseTestSuite) TestEdgeCases() {
 	err = suite.app.removeFromList(userID4, "watchlist", "")
 	require.NoError(suite.T(), err)
 	_, err = suite.app.getListDocument(userID4, "watchlist")
-	fmt.Printf("DEBUG: getListDocument(userID4) after remove err = %#v\n", err)
-	assert.Equal(suite.T(), mongo.ErrNoDocuments, err) // <-- Correct assertion
+	assert.Equal(suite.T(), mongo.ErrNoDocuments, err)
 }
 
 func (suite *DatabaseTestSuite) TestWatchingCountOperations() {
