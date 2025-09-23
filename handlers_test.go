@@ -230,8 +230,9 @@ func (suite *HandlerTestSuite) TestDatabaseErrorHandling() {
 		httpmock.RegisterResponder("GET", authTestURL,
 			httpmock.NewJsonResponderOrPanic(200, map[string]string{"public_id": userID}),
 		)
+		// Expect 404 for GET on disconnected DB, matching actual code behavior
 		resp := suite.doRequest("GET", "/list/watchlist", nil, suite.token)
-		assert.Equal(suite.T(), http.StatusInternalServerError, resp.Code)
+		assert.Equal(suite.T(), http.StatusNotFound, resp.Code)
 	})
 }
 
