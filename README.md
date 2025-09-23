@@ -1,4 +1,4 @@
-![All unit tests pass](https://github.com/cliveyg/poptape-lister-redux/actions/workflows/unit-test.yml/badge.svg)
+![All tests pass](https://github.com/cliveyg/poptape-lister-redux/actions/workflows/testsuite.yml/badge.svg)
 
 # poptape-lister-redux
 
