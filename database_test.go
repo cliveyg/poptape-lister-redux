@@ -34,9 +34,11 @@ func (suite *DatabaseTestSuite) SetupSuite() {
 	}
 
 	// Set test-specific database name
-	suite.testDBName = "poptape_lister_db_test_" + uuid.New().String()[:8]
-	suite.testUserID = "123e4567-e89b-12d3-a456-426614174000"
-	os.Setenv("MONGO_DATABASE", suite.testDBName)
+	//suite.testDBName = "poptape_lister_db_test_" + uuid.New().String()[:8]
+	suite.testDBName = "lister_test"
+	//suite.testUserID = "123e4567-e89b-12d3-a456-426614174000"
+	suite.testUserID = "lister_test"
+	//os.Setenv("MONGO_URI", suite.testDBName)
 
 	// Initialize logger
 	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
