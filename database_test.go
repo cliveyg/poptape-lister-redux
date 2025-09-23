@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -235,6 +236,7 @@ func (suite *DatabaseTestSuite) TestEdgeCases() {
 	_, err := collection.InsertOne(ctx, initialDocument)
 	require.NoError(suite.T(), err)
 
+	// Add new item and test
 	newItem := uuid.New().String()
 	err = suite.app.addToList(userID, "watchlist", newItem)
 	require.NoError(suite.T(), err)
@@ -259,8 +261,10 @@ func (suite *DatabaseTestSuite) TestEdgeCases() {
 	// Non-existent user: Should return mongo.ErrNoDocuments
 	nonExistentUser := uuid.New().String()
 	_, err = suite.app.getListDocument(nonExistentUser, "watchlist")
+	fmt.Printf("DEBUG: getListDocument(nonExistentUser) err = %#v\n", err)
 	assert.Equal(suite.T(), mongo.ErrNoDocuments, err)
 	err = suite.app.removeFromList(nonExistentUser, "watchlist", uuid.New().String())
+	fmt.Printf("DEBUG: removeFromList(nonExistentUser) err = %#v\n", err)
 	assert.NoError(suite.T(), err)
 
 	// Remove all, with new user: Should return mongo.ErrNoDocuments after removal
@@ -277,7 +281,8 @@ func (suite *DatabaseTestSuite) TestEdgeCases() {
 	err = suite.app.removeFromList(userID3, "watchlist", items3[0])
 	require.NoError(suite.T(), err)
 	_, err = suite.app.getListDocument(userID3, "watchlist")
-	assert.Equal(suite.T(), mongo.ErrNoDocuments, err) // <--- Correct assertion
+	fmt.Printf("DEBUG: getListDocument(userID3) after remove err = %#v\n", err)
+	assert.Equal(suite.T(), mongo.ErrNoDocuments, err) // <-- Correct assertion
 
 	// Remove all with empty string, with new user: Should return mongo.ErrNoDocuments after removal
 	userID4 := uuid.New().String()
@@ -293,7 +298,8 @@ func (suite *DatabaseTestSuite) TestEdgeCases() {
 	err = suite.app.removeFromList(userID4, "watchlist", "")
 	require.NoError(suite.T(), err)
 	_, err = suite.app.getListDocument(userID4, "watchlist")
-	assert.Equal(suite.T(), mongo.ErrNoDocuments, err) // <--- Correct assertion
+	fmt.Printf("DEBUG: getListDocument(userID4) after remove err = %#v\n", err)
+	assert.Equal(suite.T(), mongo.ErrNoDocuments, err) // <-- Correct assertion
 }
 
 func (suite *DatabaseTestSuite) TestWatchingCountOperations() {
