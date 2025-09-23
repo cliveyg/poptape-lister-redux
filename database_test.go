@@ -27,6 +27,7 @@ func (suite *DatabaseTestSuite) SetupSuite() {
 	_ = godotenv.Load()
 	suite.testDBName = "poptape_lister_db_test_" + uuid.New().String()[:8]
 	os.Setenv("MONGO_DATABASE", suite.testDBName)
+	os.Setenv("MONGO_URI", "mongodb://localhost:27017/lister_test")
 	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
 	suite.app = &App{Log: &logger}
 	suite.app.initialiseDatabase()
@@ -359,6 +360,65 @@ func (suite *DatabaseTestSuite) TestConcurrentOperations() {
 	}
 	for i := 0; i < numGoroutines; i++ {
 		<-done
+	}
+}
+
+// ---- EXTRA COVERAGE TESTS ----
+
+func TestAppInitialiseDatabaseTwice(t *testing.T) {
+	os.Setenv("MONGO_DATABASE", "poptape_lister_db_test_"+uuid.New().String()[:8])
+	os.Setenv("MONGO_URI", "mongodb://localhost:27017/lister_test")
+	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
+	app := &App{Log: &logger}
+	app.initialiseDatabase()
+	app.initialiseDatabase() // Should not panic
+	app.Cleanup()
+}
+
+func TestAppCleanupMultipleTimes(t *testing.T) {
+	os.Setenv("MONGO_DATABASE", "poptape_lister_db_test_"+uuid.New().String()[:8])
+	os.Setenv("MONGO_URI", "mongodb://localhost:27017/lister_test")
+	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
+	app := &App{Log: &logger}
+	app.initialiseDatabase()
+	app.Cleanup()
+	app.Cleanup() // Should not panic
+}
+
+func TestAppGetCollectionNilName(t *testing.T) {
+	os.Setenv("MONGO_DATABASE", "poptape_lister_db_test_"+uuid.New().String()[:8])
+	os.Setenv("MONGO_URI", "mongodb://localhost:27017/lister_test")
+	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
+	app := &App{Log: &logger}
+	app.initialiseDatabase()
+	coll := app.GetCollection("")
+	assert.NotNil(t, coll)
+	assert.Equal(t, "", coll.Name())
+}
+
+func TestAppGetCollectionNonexistent(t *testing.T) {
+	os.Setenv("MONGO_DATABASE", "poptape_lister_db_test_"+uuid.New().String()[:8])
+	os.Setenv("MONGO_URI", "mongodb://localhost:27017/lister_test")
+	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
+	app := &App{Log: &logger}
+	app.initialiseDatabase()
+	coll := app.GetCollection("doesnotexist")
+	assert.NotNil(t, coll)
+	assert.Equal(t, "doesnotexist", coll.Name())
+}
+
+func TestDatabaseConnectionFailure(t *testing.T) {
+	os.Setenv("MONGO_DATABASE", "poptape_lister_db_test_"+uuid.New().String()[:8])
+	os.Setenv("MONGO_URI", "mongodb://localhost:27017/lister_test")
+	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
+	app := &App{Log: &logger}
+	app.initialiseDatabase()
+	if app.Client != nil {
+		_ = app.Client.Disconnect(context.Background())
+	}
+	if app.Client != nil {
+		err := app.Client.Ping(context.Background(), nil)
+		assert.Error(t, err)
 	}
 }
 
