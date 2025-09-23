@@ -390,9 +390,10 @@ func TestAppGetCollectionNilName(t *testing.T) {
 	os.Setenv("MONGO_URI", "mongodb://localhost:27017/lister_test")
 	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
 	app := &App{Log: &logger}
-	app.initialiseDatabase() // <-- THIS LINE ADDED
+	app.initialiseDatabase()
 	coll := app.GetCollection("")
-	assert.Nil(t, coll)
+	assert.NotNil(t, coll)
+	assert.Equal(t, "", coll.Name())
 }
 
 func TestAppGetCollectionNonexistent(t *testing.T) {
@@ -402,7 +403,8 @@ func TestAppGetCollectionNonexistent(t *testing.T) {
 	app := &App{Log: &logger}
 	app.initialiseDatabase()
 	coll := app.GetCollection("doesnotexist")
-	assert.Nil(t, coll)
+	assert.NotNil(t, coll)
+	assert.Equal(t, "doesnotexist", coll.Name())
 }
 
 func TestDatabaseConnectionFailure(t *testing.T) {
