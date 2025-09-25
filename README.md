@@ -256,3 +256,8 @@ Lists are limited to 50 items, stored in most-recent-first order.
 - Add metrics and monitoring
 - Implement proper rate limiting
 - Add API documentation (OpenAPI/Swagger)
+
+## License
+
+This project is licensed under the terms of the GNU General Public License v3.0 (GPL-3.0).  
+See the [LICENSE](./LICENSE) file for details.
