@@ -6,7 +6,7 @@ services:
     image: poptape/lister-redux/api:v${VERSION}
     ports:
       - "1600:8400"
-    restart: no
+    restart: always
     depends_on:
       - mongodb
     environment:
