@@ -13,14 +13,6 @@ services:
       - "GOOS=${GOOS}"
       - "GOARCH=${GOARCH}"
       - "PORT=${PORT}"
-#      - LOGLEVEL={$LOGLEVEL}
-#      - LOGFILE={$LOGFILE}
-#      - MONGO_HOST=mongodb
-#      - MONGO_PORT=27017
-#      - MONGO_USERNAME=${MONGO_USERNAME}
-#      - MONGO_PASSWORD=${MONGO_PASSWORD}
-#      - MONGO_DATABASE=${MONGO_DATABASE}
-#      - VERSION=v${VERSION}
     volumes:
       - ${LOCAL_LOG_LOC}:/lister/log
     logging:
@@ -45,6 +37,7 @@ services:
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
     volumes: 
       - poptape_lister_data:/data/db
+      - /tmp/ignoreme:/data/configdb # this prevents docker creating odd 0 byte volumes
     networks:
       - poptape
 
